@@ -6,9 +6,10 @@ import urllib.request
 import urllib.parse
 import gzip
 import json
-from exceptions import *
+from hawkenapi.exceptions import *
 
-class HawkenApi:
+
+class Client:
     def __init__(self, stack="services.live", scheme="http"):
         self.user_agent = ""
         self.stack = stack
@@ -287,5 +288,3 @@ class HawkenApi:
         response = self._require_auth(lambda: self._get(endpoint, self.grant))
 
         return response["Result"]
-
-
