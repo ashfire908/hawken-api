@@ -292,3 +292,16 @@ class Client:
         response = self._require_auth(lambda: self._get(endpoint, self.grant))
 
         return response["Result"]
+
+    def game_items(self, guid=None):
+        if guid is None:
+            endpoint = "gameItems"
+        else:
+            endpoint = "gameItems/{0}".format(guid)
+
+        response = self._require_auth(lambda: self._get(endpoint, self.grant))
+
+        if response["Status"] == 404:
+            return None
+        else:
+            return response["Result"]
