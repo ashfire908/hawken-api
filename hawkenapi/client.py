@@ -150,7 +150,11 @@ class Client:
         if response["Status"] == 404:
             return None
         else:
-            return response["Result"]["UniqueCaseInsensitive_Callsign"]
+            # Some users don't have a callsign
+            try:
+                return response["Result"]["UniqueCaseInsensitive_Callsign"]
+            except KeyError:
+                return None
 
     def user_guid(self, callsign):
         endpoint = "uniqueValues/UniqueCaseInsensitive_UserPublicReadOnlyData_Callsign/{0}".format(callsign)
