@@ -46,7 +46,7 @@ class Client:
             try:
                 logging.error("API: Exception at response - {0} {1}".format(request.method, connection.url))
             except:
-                logging.error("API: Exception at request - {0} {1} ".format(request.method, request.selector))
+                logging.error("API: Exception at request - {0} {1}".format(request.method, request.selector))
             raise
 
         # Decode the response
