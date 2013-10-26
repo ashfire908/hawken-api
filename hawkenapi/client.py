@@ -6,7 +6,7 @@ import urllib.request
 import urllib.parse
 import gzip
 import json
-from hawkenapi.exceptions import *
+from hawkenapi.exceptions import AuthenticationFailure, NotAuthenticated, NotAuthorized, InternalServerError, BackendOverCapacity, WrongOwner, auth_exception
 
 
 class Client:
@@ -90,7 +90,7 @@ class Client:
 
         return self._handle_request(request, auth)
 
-    def _check_response(self, response):
+    def _check_response(self, response, check_request=True):
         # Log the request
         logging.debug("API: {0[method]} {0[url]} {1}".format(response[1], response[0]["Status"]))
 
@@ -99,41 +99,60 @@ class Client:
             raise BackendOverCapacity(response["Message"], response["Status"])
         if response[0]["Status"] == 500:
             raise InternalServerError(response["Message"], response["Status"])
+        if check_request:
+            # Check for request errors
+            if response[0]["Status"] == 401:
+                auth_exception(response[0])
 
         # Return the response data
         return response[0]
 
-    def _no_auth(self, api_call):
-        response = self._check_response(api_call())
+    def _no_auth(self, api_call, check_request=True):
+        response = self._check_response(api_call(), check_request)
 
         return response
 
-    def _require_auth(self, api_call):
+    def _require_auth(self, api_call, check_request=True):
         if self.grant is None:
-            logging.info("API: Automatically authenticating")
-            self.auth(self.auth_username, self.auth_password)
-            response = self._check_response(api_call())
-        else:
-            response = self._check_response(api_call())
-            if response["Status"] == 401 and self._auto_auth:
+            if self._auto_auth:
+                logging.info("API: Automatically authenticating.")
+                self.auth(self.auth_username, self.auth_password)
+            else:
+                logging.error("API: Auth-required request made but no auth performed or credentials given.")
+                raise NotAuthenticated("Auth-required request made but no auth performed or credentials given.", 401)
+
+        try:
+            response = self._check_response(api_call(), check_request)
+        except NotAuthorized as ex:
+            # Only reauth if the auth was expired
+            if ex.expired and self._auto_auth:
                 logging.info("API: Automatically authenticating [reauth] ({0})".format(response["Message"]))
                 self.auth(self.auth_username, self.auth_password)
-                response = self._check_response(api_call())
-        if response["Status"] == 401:
-            raise NotAuthorized(response["Message"], response["Status"])
-        else:
-            return response
+                response = self._check_response(api_call(), check_request)
+            else:
+                raise
+
+        return response
 
     def auth(self, username, password):
+        # Check that we don't have a blank username/password
+        if not isinstance(username, str) or username == "":
+            raise ValueError("Username cannot be blank")
+        if not isinstance(password, str) or password == "":
+            raise ValueError("Password cannot be blank")
+
         # Get the request together
         endpoint = "users/{0}/accessGrant".format(urllib.parse.quote(username))
         data = {"Password": password}
 
-        response = self._no_auth(lambda: self._post(endpoint, data=data))
+        response = self._no_auth((lambda: self._post(endpoint, data=data)), check_request=False)
 
         if response["Status"] == 200:
             self.grant = response["Result"]
             return True
+        elif response["Status"] == 401 or response["Status"] == 404 or response["Status"] == 400:
+            # No such user/Bad password/Blank password
+            raise AuthenticationFailure(response["Message"], response["Status"])
         else:
             return False
 
