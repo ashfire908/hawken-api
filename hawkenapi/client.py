@@ -6,10 +6,16 @@ import urllib.request
 import urllib.parse
 import gzip
 import json
-from hawkenapi.exceptions import AuthenticationFailure, NotAuthenticated, NotAuthorized, InternalServerError, BackendOverCapacity, WrongOwner, auth_exception
+from hawkenapi.exceptions import AuthenticationFailure, NotAuthenticated, NotAuthorized, InternalServerError, \
+    BackendOverCapacity, WrongOwner, InvalidBatch, auth_exception
+from hawkenapi.util import enum
 
 # Setup logging
 logging = logging.getLogger("hawkenapi")
+
+
+# Request flags
+RequestFlags = enum(BATCH="batch")
 
 
 class Client:
@@ -60,10 +66,17 @@ class Client:
         else:
             raise NotImplementedError("Unknown encoding type given")
 
-        return (json.loads(response.decode(charset)), {"url": connection.url, "method": request.method})
+        # Get flags
+        flags = []
+        if request.has_header("X-Meteor-Batch"):
+            flags.append(RequestFlags.BATCH)
 
-    def _get(self, endpoint, auth=None):
+        return (json.loads(response.decode(charset)), {"url": connection.url, "method": request.method, "flags": flags})
+
+    def _get(self, endpoint, auth=None, batch=None):
         request = urllib.request.Request(self._build_endpoint(endpoint), method="GET")
+        if batch:
+            request.add_header("X-Meteor-Batch", ",".join(batch))
 
         return self._handle_request(request, auth)
 
@@ -106,6 +119,8 @@ class Client:
             # Check for request errors
             if response[0]["Status"] == 401:
                 auth_exception(response[0])
+            elif response[0]["Status"] == 400 and RequestFlags.BATCH in response[1]["flags"]:
+                raise InvalidBatch(response["Message"], response["Status"], response["Result"])
 
         # Return the response data
         return response[0]

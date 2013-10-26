@@ -65,6 +65,29 @@ class WrongOwner(ApiException):
     pass
 
 
+class InvalidBatch(ApiException):
+    def __init__(self, message, code, result):
+        self.result = result
+        super(InvalidBatch, self).__init__(message, code)
+
+    def __getattr__(self, key):
+        if key == "errors":
+            return self.get_errors(self.result)
+        else:
+            raise AttributeError
+
+    @staticmethod
+    def get_errors(result):
+        errors = {}
+        for error in result:
+            try:
+                errors[error["Error"]].append(error["Guid"])
+            except KeyError:
+                errors[error["Error"]] = [error["Guid"]]
+
+        return errors
+
+
 def auth_exception(response):
     if NotAuthenticated.is_missing(response["Message"]):
         raise NotAuthenticated(response["Message"], response["Status"])
