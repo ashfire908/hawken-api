@@ -8,6 +8,9 @@ import gzip
 import json
 from hawkenapi.exceptions import AuthenticationFailure, NotAuthenticated, NotAuthorized, InternalServerError, BackendOverCapacity, WrongOwner, auth_exception
 
+# Setup logging
+logging = logging.getLogger("hawkenapi")
+
 
 class Client:
     def __init__(self, stack="services.live", scheme="http"):
@@ -44,9 +47,9 @@ class Client:
                 connection.close()
         except:
             try:
-                logging.error("API: Exception at response - {0} {1}".format(request.method, connection.url))
+                logging.error("Exception at response - {0} {1}".format(request.method, connection.url))
             except:
-                logging.error("API: Exception at request - {0} {1}".format(request.method, request.selector))
+                logging.error("Exception at request - {0} {1}".format(request.method, request.selector))
             raise
 
         # Decode the response
@@ -55,7 +58,7 @@ class Client:
         elif content_encoding == "gzip":
             response = gzip.decompress(response)
         else:
-            raise NotImplementedError("Unknown encoding type given.")
+            raise NotImplementedError("Unknown encoding type given")
 
         return (json.loads(response.decode(charset)), {"url": connection.url, "method": request.method})
 
@@ -92,7 +95,7 @@ class Client:
 
     def _check_response(self, response, check_request=True):
         # Log the request
-        logging.debug("API: {0[method]} {0[url]} {1}".format(response[1], response[0]["Status"]))
+        logging.debug("{0[method]} {0[url]} {1}".format(response[1], response[0]["Status"]))
 
         # Check for general errors
         if response[0]["Status"] == 503:
@@ -115,18 +118,18 @@ class Client:
     def _require_auth(self, api_call, check_request=True):
         if self.grant is None:
             if self._auto_auth:
-                logging.info("API: Automatically authenticating.")
+                logging.info("Automatically authenticating.")
                 self.auth(self.auth_username, self.auth_password)
             else:
-                logging.error("API: Auth-required request made but no auth performed or credentials given.")
-                raise NotAuthenticated("Auth-required request made but no auth performed or credentials given.", 401)
+                logging.error("Auth-required request made but no auth performed or credentials given.")
+                raise NotAuthenticated("Auth-required request made but no auth performed or credentials given", 401)
 
         try:
             response = self._check_response(api_call(), check_request)
         except NotAuthorized as ex:
             # Only reauth if the auth was expired
             if ex.expired and self._auto_auth:
-                logging.info("API: Automatically authenticating [reauth] ({0})".format(response["Message"]))
+                logging.info("Automatically authenticating [reauth] ({0})".format(response["Message"]))
                 self.auth(self.auth_username, self.auth_password)
                 response = self._check_response(api_call(), check_request)
             else:
