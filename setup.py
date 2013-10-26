@@ -3,7 +3,7 @@
 
 from distutils.core import setup
 
-setup(name="HawkenAPI",
+setup(name="HawkenApi",
       version="0.1.0",
       description="Hawken API Client Library",
       author="Andrew Hampe",
