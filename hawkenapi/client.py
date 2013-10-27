@@ -179,7 +179,28 @@ class Client:
         self.auth_password = password
         self._auto_auth = True
 
-    def user_callsign(self, guid):
+    def user_account(self, identifier):
+        # Check that we don't have a blank identifier
+        if not isinstance(identifier, str) or identifier == "":
+            raise ValueError("Identifier cannot be blank")
+
+        endpoint = "users/{0}".format(identifier)
+
+        try:
+            response = self._require_auth(lambda: self._get(endpoint, self.grant))
+        except NotAuthorized as ex:
+            if not ex.expired:
+                raise WrongOwner(ex.message, ex.code)
+            else:
+                raise
+
+        return response["Result"]
+
+    def user_publicdata(self, guid):
+        # Check that we don't have a blank guid
+        if not isinstance(guid, str) or guid == "":
+            raise ValueError("User GUID cannot be blank")
+
         endpoint = "userPublicReadOnlyData/{0}".format(guid)
 
         response = self._require_auth(lambda: self._get(endpoint, self.grant))
@@ -187,13 +208,26 @@ class Client:
         if response["Status"] == 404:
             return None
         else:
-            # Some users don't have a callsign
+            return response["Result"]
+
+    def user_callsign(self, guid):
+        response = self.user_publicdata(guid)
+
+        # Some users don't have a callsign
+        if response is not None:
             try:
-                return response["Result"]["UniqueCaseInsensitive_Callsign"]
+                return response["UniqueCaseInsensitive_Callsign"]
             except KeyError:
-                return None
+                # Catch it in the following line
+                pass
+
+        return None
 
     def user_guid(self, callsign):
+        # Check that we don't have a blank callsign
+        if not isinstance(callsign, str) or callsign == "":
+            raise ValueError("Callsign cannot be blank")
+
         endpoint = "uniqueValues/UniqueCaseInsensitive_UserPublicReadOnlyData_Callsign/{0}".format(callsign)
 
         response = self._no_auth(lambda: self._get(endpoint))
@@ -204,6 +238,10 @@ class Client:
             return response["Result"]["UserGuid"]
 
     def user_server(self, guid):
+        # Check that we don't have a blank guid
+        if not isinstance(guid, str) or guid == "":
+            raise ValueError("User GUID cannot be blank")
+
         endpoint = "userGameServers/{0}".format(guid)
 
         response = self._require_auth(lambda: self._get(endpoint, self.grant))
@@ -214,7 +252,35 @@ class Client:
             return response["Result"]
 
     def user_stats(self, guid):
-        endpoint = "userStats/{0}".format(guid)
+        if isinstance(guid, str):
+            # Single request
+            if guid == "":
+                raise ValueError("User GUID cannot be blank")
+
+            endpoint = "userStats/{0}".format(guid)
+            response = self._require_auth(lambda: self._get(endpoint, self.grant))
+        else:
+            # Batch request
+            if len(guid) == 0:
+                raise ValueError("List of user GUIDs cannot be empty")
+
+            endpoint = "userStats"
+            response = self._require_auth(lambda: self._get(endpoint, self.grant, batch=guid))
+
+        if response["Status"] == 404:
+            return None
+        else:
+            return response["Result"]
+
+    def server_list(self, guid=None):
+        if guid is None:
+            endpoint = "gameServerListings"
+        else:
+            # Check that we don't have a blank guid
+            if not isinstance(guid, str) or guid == "":
+                raise ValueError("Server GUID cannot be blank")
+
+            endpoint = "gameServerListings/{0}".format(guid)
 
         response = self._require_auth(lambda: self._get(endpoint, self.grant))
 
@@ -223,24 +289,7 @@ class Client:
         else:
             return response["Result"]
 
-    def server_list(self):
-        endpoint = "gameServerListings"
-
-        response = self._require_auth(lambda: self._get(endpoint, self.grant))
-
-        return response["Result"]
-
-    def server_info(self, guid):
-        endpoint = "gameServerListings/{0}".format(guid)
-
-        response = self._require_auth(lambda: self._get(endpoint, self.grant))
-
-        if response["Status"] == 404:
-            return None
-        else:
-            return response["Result"]
-
-    def server_info_by_name(self, name):
+    def server_by_name(self, name):
         server_list = self.server_list()
 
         found_server = None
@@ -253,6 +302,9 @@ class Client:
         return found_server
 
     def matchmaking_advertisement(self, guid):
+        # Check that we don't have a blank guid
+        if not isinstance(guid, str) or guid == "":
+            raise ValueError("Advertisement GUID cannot be blank")
         endpoint = "hawkenClientMatchmakingAdvertisements/{0}".format(guid)
 
         response = self._require_auth(lambda: self._get(endpoint, self.grant))
@@ -262,8 +314,29 @@ class Client:
         else:
             return response["Result"]
 
-    def matchmaking_advertisement_post(self, gameversion, gametype, region, owner, users, party=None):
+    def matchmaking_advertisement_post(self, advertisement):
         endpoint = "hawkenClientMatchmakingAdvertisements"
+
+        response = self._require_auth(lambda: self._post(endpoint, self.grant, advertisement))
+
+        if response["Status"] == 403:
+            raise WrongOwner(response["Message"], response["Status"])
+
+        return response["Result"]
+
+    def matchmaking_advertisement_post_matchmaking(self, gameversion, gametype, region, owner, users, party=None):
+        # Check the parameters given
+        if not isinstance(gameversion, str) or gameversion == "":
+            raise ValueError("Game Version cannot be blank")
+        if not isinstance(gametype, str) or gametype == "":
+            raise ValueError("Game Type cannot be blank")
+        if not isinstance(region, str) or region == "":
+            raise ValueError("Region cannot be blank")
+        if not isinstance(owner, str) or owner == "":
+            raise ValueError("Owner cannot be blank")
+        if len(users) == 0:
+            raise ValueError("Users list cannot be empty")
+
         advertisement = {
             "GameType": gametype,
             "GameVersion": gameversion,
@@ -273,17 +346,25 @@ class Client:
         }
 
         if party is not None:
+            if not isinstance(party, str) or party == "":
+                raise ValueError("Party GUID cannot be blank")
             advertisement["PartyGuid"] = party
 
-        response = self._require_auth(lambda: self._post(endpoint, self.grant, advertisement))
-
-        if response["Status"] == 403:
-            raise WrongOwner(response["Message"], response["Status"])
-
-        return response["Result"]
+        return self.matchmaking_advertisement_post(advertisement)
 
     def matchmaking_advertisement_post_server(self, gameversion, region, server, owner, users, party=None):
-        endpoint = "hawkenClientMatchmakingAdvertisements"
+        # Check the parameters given
+        if not isinstance(gameversion, str) or gameversion == "":
+            raise ValueError("Game Version cannot be blank")
+        if not isinstance(region, str) or region == "":
+            raise ValueError("Region cannot be blank")
+        if not isinstance(server, str) or server == "":
+            raise ValueError("Server cannot be blank")
+        if not isinstance(owner, str) or owner == "":
+            raise ValueError("Owner cannot be blank")
+        if len(users) == 0:
+            raise ValueError("Users list cannot be empty")
+
         advertisement = {
             "GameVersion": gameversion,
             "OwnerGuid": owner,
@@ -293,16 +374,16 @@ class Client:
         }
 
         if party is not None:
+            if not isinstance(party, str) or party == "":
+                raise ValueError("Party GUID cannot be blank")
             advertisement["PartyGuid"] = party
 
-        response = self._require_auth(lambda: self._post(endpoint, self.grant, advertisement))
-
-        if response["Status"] == 403:
-            raise WrongOwner(response["Message"], response["Status"])
-
-        return response["Result"]
+        return self.matchmaking_advertisement_post(advertisement)
 
     def matchmaking_advertisement_delete(self, guid):
+        # Check that we don't have a blank guid
+        if not isinstance(guid, str) or guid == "":
+            raise ValueError("Advertisement GUID cannot be blank")
         endpoint = "hawkenClientMatchmakingAdvertisements/{0}".format(guid)
 
         response = self._require_auth(lambda: self._delete(endpoint, self.grant))
@@ -317,6 +398,9 @@ class Client:
             return False
 
     def presence_access(self, guid):
+        # Check that we don't have a blank guid
+        if not isinstance(guid, str) or guid == "":
+            raise ValueError("User GUID cannot be blank")
         endpoint = "thirdParty/{0}/Presence/Access".format(guid)
 
         response = self._require_auth(lambda: self._get(endpoint, self.grant))
@@ -324,6 +408,9 @@ class Client:
         return response["Result"]
 
     def presence_domain(self, guid):
+        # Check that we don't have a blank guid
+        if not isinstance(guid, str) or guid == "":
+            raise ValueError("User GUID cannot be blank")
         endpoint = "thirdParty/{0}/Presence/Domain".format(guid)
 
         response = self._require_auth(lambda: self._get(endpoint, self.grant))
@@ -334,6 +421,8 @@ class Client:
         if guid is None:
             endpoint = "gameItems"
         else:
+            if not isinstance(guid, str) or guid == "":
+                raise ValueError("Item GUID cannot be blank")
             endpoint = "gameItems/{0}".format(guid)
 
         response = self._require_auth(lambda: self._get(endpoint, self.grant))
