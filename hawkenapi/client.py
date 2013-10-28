@@ -3,12 +3,12 @@
 
 import logging
 import urllib.request
-import urllib.parse
 import gzip
 import json
 from hawkenapi.exceptions import AuthenticationFailure, NotAuthenticated, NotAuthorized, InternalServerError, \
     BackendOverCapacity, WrongOwner, InvalidBatch, auth_exception
 from hawkenapi.util import enum
+from hawkenapi import endpoints
 
 # Setup logging
 logging = logging.getLogger("hawkenapi")
@@ -74,7 +74,7 @@ class Client:
         return (json.loads(response.decode(charset)), {"url": connection.url, "method": request.method, "flags": flags})
 
     def _get(self, endpoint, auth=None, batch=None):
-        request = urllib.request.Request(self._build_endpoint(endpoint), method="GET")
+        request = urllib.request.Request(self._build_endpoint(endpoint), method=endpoints.Methods.GET)
         if batch:
             request.add_header("X-Meteor-Batch", ",".join(batch))
 
@@ -88,7 +88,20 @@ class Client:
         else:
             body = json.dumps(data).encode()
 
-        request = urllib.request.Request(self._build_endpoint(endpoint), body, method="POST")
+        request = urllib.request.Request(self._build_endpoint(endpoint), body, method=endpoints.Methods.POST)
+        request.add_header("Content-Type", "application/json")
+
+        return self._handle_request(request, auth)
+
+    def _put(self, endpoint, auth=None, data=False):
+        if data is False:
+            body = None
+        elif data is None:
+            body = "".encode()
+        else:
+            body = json.dumps(data).encode()
+
+        request = urllib.request.Request(self._build_endpoint(endpoint), body, method=endpoints.Methods.PUT)
         request.add_header("Content-Type", "application/json")
 
         return self._handle_request(request, auth)
@@ -101,7 +114,7 @@ class Client:
         else:
             body = json.dumps(data).encode()
 
-        request = urllib.request.Request(self._build_endpoint(endpoint), body, method="DELETE")
+        request = urllib.request.Request(self._build_endpoint(endpoint), body, method=endpoints.Methods.DELETE)
         request.add_header("Content-Type", "application/json")
 
         return self._handle_request(request, auth)
@@ -160,7 +173,7 @@ class Client:
             raise ValueError("Password cannot be blank")
 
         # Get the request together
-        endpoint = "users/{0}/accessGrant".format(urllib.parse.quote(username))
+        endpoint = endpoints.user_accessgrant.format(username)
         data = {"Password": password}
 
         response = self._no_auth((lambda: self._post(endpoint, data=data)), check_request=False)
@@ -184,7 +197,7 @@ class Client:
         if not isinstance(identifier, str) or identifier == "":
             raise ValueError("Identifier cannot be blank")
 
-        endpoint = "users/{0}".format(identifier)
+        endpoint = endpoints.user.format(identifier)
 
         try:
             response = self._require_auth(lambda: self._get(endpoint, self.grant))
@@ -201,7 +214,7 @@ class Client:
         if not isinstance(guid, str) or guid == "":
             raise ValueError("User GUID cannot be blank")
 
-        endpoint = "userPublicReadOnlyData/{0}".format(guid)
+        endpoint = endpoints.user_publicdata_single.format(guid)
 
         response = self._require_auth(lambda: self._get(endpoint, self.grant))
 
@@ -228,7 +241,7 @@ class Client:
         if not isinstance(callsign, str) or callsign == "":
             raise ValueError("Callsign cannot be blank")
 
-        endpoint = "uniqueValues/UniqueCaseInsensitive_UserPublicReadOnlyData_Callsign/{0}".format(callsign)
+        endpoint = endpoints.uniquevalues_callsign.format(callsign)
 
         response = self._no_auth(lambda: self._get(endpoint))
 
@@ -242,7 +255,7 @@ class Client:
         if not isinstance(guid, str) or guid == "":
             raise ValueError("User GUID cannot be blank")
 
-        endpoint = "userGameServers/{0}".format(guid)
+        endpoint = endpoints.server_user.format(guid)
 
         response = self._require_auth(lambda: self._get(endpoint, self.grant))
 
@@ -257,14 +270,14 @@ class Client:
             if guid == "":
                 raise ValueError("User GUID cannot be blank")
 
-            endpoint = "userStats/{0}".format(guid)
+            endpoint = endpoints.user_stat_single.format(guid)
             response = self._require_auth(lambda: self._get(endpoint, self.grant))
         else:
             # Batch request
             if len(guid) == 0:
                 raise ValueError("List of user GUIDs cannot be empty")
 
-            endpoint = "userStats"
+            endpoint = endpoints.user_stat_batch.format()
             response = self._require_auth(lambda: self._get(endpoint, self.grant, batch=guid))
 
         if response["Status"] == 404:
@@ -274,13 +287,13 @@ class Client:
 
     def server_list(self, guid=None):
         if guid is None:
-            endpoint = "gameServerListings"
+            endpoint = endpoints.server.format()
         else:
             # Check that we don't have a blank guid
             if not isinstance(guid, str) or guid == "":
                 raise ValueError("Server GUID cannot be blank")
 
-            endpoint = "gameServerListings/{0}".format(guid)
+            endpoint = endpoints.server_single.format(guid)
 
         response = self._require_auth(lambda: self._get(endpoint, self.grant))
 
@@ -305,7 +318,7 @@ class Client:
         # Check that we don't have a blank guid
         if not isinstance(guid, str) or guid == "":
             raise ValueError("Advertisement GUID cannot be blank")
-        endpoint = "hawkenClientMatchmakingAdvertisements/{0}".format(guid)
+        endpoint = endpoints.advertisement_single.format(guid)
 
         response = self._require_auth(lambda: self._get(endpoint, self.grant))
 
@@ -315,7 +328,7 @@ class Client:
             return response["Result"]
 
     def matchmaking_advertisement_post(self, advertisement):
-        endpoint = "hawkenClientMatchmakingAdvertisements"
+        endpoint = endpoints.advertisement.format()
 
         response = self._require_auth(lambda: self._post(endpoint, self.grant, advertisement))
 
@@ -384,7 +397,7 @@ class Client:
         # Check that we don't have a blank guid
         if not isinstance(guid, str) or guid == "":
             raise ValueError("Advertisement GUID cannot be blank")
-        endpoint = "hawkenClientMatchmakingAdvertisements/{0}".format(guid)
+        endpoint = endpoints.advertisement_single.format(guid)
 
         response = self._require_auth(lambda: self._delete(endpoint, self.grant))
 
@@ -401,7 +414,7 @@ class Client:
         # Check that we don't have a blank guid
         if not isinstance(guid, str) or guid == "":
             raise ValueError("User GUID cannot be blank")
-        endpoint = "thirdParty/{0}/Presence/Access".format(guid)
+        endpoint = endpoints.presence_access.format(guid)
 
         response = self._require_auth(lambda: self._get(endpoint, self.grant))
 
@@ -411,7 +424,7 @@ class Client:
         # Check that we don't have a blank guid
         if not isinstance(guid, str) or guid == "":
             raise ValueError("User GUID cannot be blank")
-        endpoint = "thirdParty/{0}/Presence/Domain".format(guid)
+        endpoint = endpoints.presence_domain.format(guid)
 
         response = self._require_auth(lambda: self._get(endpoint, self.grant))
 
@@ -419,11 +432,11 @@ class Client:
 
     def game_items(self, guid=None):
         if guid is None:
-            endpoint = "gameItems"
+            endpoint = endpoints.item.format()
         else:
             if not isinstance(guid, str) or guid == "":
                 raise ValueError("Item GUID cannot be blank")
-            endpoint = "gameItems/{0}".format(guid)
+            endpoint = endpoints.item_single.format(guid)
 
         response = self._require_auth(lambda: self._get(endpoint, self.grant))
 
