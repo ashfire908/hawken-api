@@ -53,6 +53,20 @@ class NotAuthorized(ApiException):
         return NotAuthorized._re_expired.match(message) is not None
 
 
+class NotAllowed(ApiException):
+    _re_denied = re.compile(r"^Invalid Access Grant:\s+\(\)$")
+
+    def __getattr__(self, key):
+        if key == "denied":
+            return self.is_denied(self.message)
+        else:
+            raise AttributeError
+
+    @staticmethod
+    def is_denied(message):
+        return NotAuthorized._re_denied.match(message) is not None
+
+
 class InternalServerError(ApiException):
     pass
 
@@ -91,6 +105,8 @@ class InvalidBatch(ApiException):
 def auth_exception(response):
     if NotAuthenticated.is_missing(response["Message"]):
         raise NotAuthenticated(response["Message"], response["Status"])
+    elif NotAllowed.is_denied(response["Message"]):
+        raise NotAllowed(response["Message"], response["Status"])
     elif AuthenticationFailure.is_badpass(response["Message"]):
         raise AuthenticationFailure(response["Message"], response["Status"])
     else:
