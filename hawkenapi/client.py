@@ -187,6 +187,29 @@ class Client:
         else:
             return False
 
+    def deauth(self, guid, access_token=None):
+        # Check that we don't have a blank guid
+        if not isinstance(guid, str) or guid == "":
+            raise ValueError("User GUID cannot be blank")
+
+        # Check for if a custom token was passed
+        if access_token is None:
+            access_token = self.grant
+        # Check that we don't have a blank access token
+        elif not isinstance(access_token, str) or access_token == "":
+            raise ValueError("Access Token cannot be blank")
+
+        # Get the request together
+        endpoint = endpoints.user_accessgrant.format(guid)
+        data = {"AccessGrant": access_token}
+
+        response = self._require_auth((lambda: self._put(endpoint, access_token, data=data)))
+
+        if response["Status"] == 200:
+            return True
+        else:
+            return False
+
     def auto_auth(self, username, password):
         self.auth_username = username
         self.auth_password = password
