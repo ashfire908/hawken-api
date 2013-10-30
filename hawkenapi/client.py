@@ -125,15 +125,15 @@ class Client:
 
         # Check for general errors
         if response[0]["Status"] == 503:
-            raise BackendOverCapacity(response["Message"], response["Status"])
+            raise BackendOverCapacity(response[0]["Message"], response[0]["Status"])
         if response[0]["Status"] == 500:
-            raise InternalServerError(response["Message"], response["Status"])
+            raise InternalServerError(response[0]["Message"], response[0]["Status"])
         if check_request:
             # Check for request errors
             if response[0]["Status"] == 401:
                 auth_exception(response[0])
             elif response[0]["Status"] == 400 and RequestFlags.BATCH in response[1]["flags"]:
-                raise InvalidBatch(response["Message"], response["Status"], response["Result"])
+                raise InvalidBatch(response[0]["Message"], response[0]["Status"], response[0]["Result"])
 
         # Return the response data
         return response[0]
