@@ -157,7 +157,7 @@ class Client:
         except NotAuthorized as ex:
             # Only reauth if the auth was expired
             if ex.expired and self._auto_auth:
-                logging.info("Automatically authenticating [reauth] ({0})".format(response["Message"]))
+                logging.info("Automatically authenticating [reauth] ([{0}] {1})".format(ex.code, ex.message))
                 self.auth(self.auth_username, self.auth_password)
                 response = self._check_response(api_call(), check_request)
             else:
