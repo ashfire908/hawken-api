@@ -64,7 +64,7 @@ class NotAllowed(ApiException):
 
     @staticmethod
     def is_denied(message):
-        return NotAuthorized._re_denied.match(message) is not None
+        return NotAllowed._re_denied.match(message) is not None
 
 
 class InternalServerError(ApiException):
