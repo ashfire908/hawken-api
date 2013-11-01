@@ -3,12 +3,13 @@
 
 import logging
 import urllib.request
+import urllib.error
 import gzip
 import json
-from hawkenapi.exceptions import AuthenticationFailure, NotAuthenticated, NotAuthorized, InternalServerError, \
-    BackendOverCapacity, WrongOwner, InvalidBatch, auth_exception
-from hawkenapi.util import enum
 from hawkenapi import endpoints
+from hawkenapi.exceptions import AuthenticationFailure, NotAuthenticated, NotAuthorized, InternalServerError, \
+    ServiceUnavailable, WrongOwner, InvalidRequest, InvalidBatch, auth_exception
+from hawkenapi.util import enum
 
 # Setup logging
 logging = logging.getLogger("hawkenapi")
@@ -16,6 +17,32 @@ logging = logging.getLogger("hawkenapi")
 
 # Request flags
 RequestFlags = enum(BATCH="batch")
+
+
+# Decorators
+def require_auth(f):
+    def auth_handler(self, *args, **kwargs):
+        if self.grant is None:
+            if self._auto_auth:
+                logging.info("Automatically authenticating.")
+                self.auth(self.auth_username, self.auth_password)
+            else:
+                logging.error("Auth-required request made but no auth performed or credentials given.")
+                raise NotAuthenticated("Auth-required request made but no auth performed or credentials given", 401)
+
+        try:
+            response = f(self, *args, **kwargs)
+        except NotAuthorized as ex:
+            # Only reauth if the auth was expired
+            if ex.expired and self._auto_auth:
+                logging.info("Automatically authenticating [reauth] ([{0}] {1})".format(ex.code, ex.message))
+                self.auth(self.auth_username, self.auth_password)
+                response = f(self, *args, **kwargs)
+            else:
+                raise
+        
+        return response
+    return auth_handler
 
 
 class Client:
@@ -29,14 +56,31 @@ class Client:
     def _build_endpoint(self, endpoint):
         return "{0}://{1}.hawken.meteor-ent.com/{2}".format(self.scheme, self.stack, endpoint)
 
-    def _handle_request(self, request, auth):
+    def _request_prepare(self, endpoint, method, auth=None, data=False, batch=None):
+        # Encode data
+        if data is False:
+            body = None
+        elif data is None:
+            body = "".encode()
+        else:
+            body = json.dumps(data).encode()
+
+        request = urllib.request.Request(self._build_endpoint(endpoint), body, method=method)
+
+        # Add headers
+        if auth is not None:
+            request.add_header("Authorization", "Basic %s" % auth)
+        if body is not None:
+            request.add_header("Content-Type", "application/json")
+        if batch:
+            request.add_header("X-Meteor-Batch", ",".join(batch))
+
+        return request
+
+    def _request_perform(self, request):
         # Add global headers
         request.add_header("User-Agent", self.user_agent)
         request.add_header("Accept-Encoding", "gzip")
-
-        # Handle auth
-        if auth is not None:
-            request.add_header("Authorization", "Basic %s" % auth)
 
         try:
             # Open the connection, load the data
@@ -73,59 +117,30 @@ class Client:
 
         return (json.loads(response.decode(charset)), {"url": connection.url, "method": request.method, "flags": flags})
 
-    def _get(self, endpoint, auth=None, batch=None):
-        request = urllib.request.Request(self._build_endpoint(endpoint), method=endpoints.Methods.GET)
-        if batch:
-            request.add_header("X-Meteor-Batch", ",".join(batch))
+    def request(self, endpoint, method, check_request=True, **kwargs):
+        try:
+            # Create the API request
+            request = self._request_prepare(endpoint, method, **kwargs)
+            # Perform the request
+            response = self._request_perform(request)
+        except urllib.error.HTTPError as e:
+            # Handle HTTP errors
+            if e.code not in (400, 500, 503):
+                # Service unavailable (usually backend at capacity)
+                raise ServiceUnavailable(e.reason, e.code) from e
+            elif e.code == 500:
+                # Internal server error (HTTP level)
+                raise InternalServerError(e.reason, e.code) from e
+            elif e.code == 400:
+                # Bad request (HTTP level)
+                raise InvalidRequest(e.reason, e.code) from e
+            else:
+                raise
 
-        return self._handle_request(request, auth)
-
-    def _post(self, endpoint, auth=None, data=False):
-        if data is False:
-            body = None
-        elif data is None:
-            body = "".encode()
-        else:
-            body = json.dumps(data).encode()
-
-        request = urllib.request.Request(self._build_endpoint(endpoint), body, method=endpoints.Methods.POST)
-        request.add_header("Content-Type", "application/json")
-
-        return self._handle_request(request, auth)
-
-    def _put(self, endpoint, auth=None, data=False):
-        if data is False:
-            body = None
-        elif data is None:
-            body = "".encode()
-        else:
-            body = json.dumps(data).encode()
-
-        request = urllib.request.Request(self._build_endpoint(endpoint), body, method=endpoints.Methods.PUT)
-        request.add_header("Content-Type", "application/json")
-
-        return self._handle_request(request, auth)
-
-    def _delete(self, endpoint, auth=None, data=False):
-        if data is False:
-            body = None
-        elif data is None:
-            body = "".encode()
-        else:
-            body = json.dumps(data).encode()
-
-        request = urllib.request.Request(self._build_endpoint(endpoint), body, method=endpoints.Methods.DELETE)
-        request.add_header("Content-Type", "application/json")
-
-        return self._handle_request(request, auth)
-
-    def _check_response(self, response, check_request=True):
         # Log the request
         logging.debug("{0[method]} {0[url]} {1}".format(response[1], response[0]["Status"]))
 
         # Check for general errors
-        if response[0]["Status"] == 503:
-            raise BackendOverCapacity(response[0]["Message"], response[0]["Status"])
         if response[0]["Status"] == 500:
             raise InternalServerError(response[0]["Message"], response[0]["Status"])
         if check_request:
@@ -138,33 +153,6 @@ class Client:
         # Return the response data
         return response[0]
 
-    def _no_auth(self, api_call, check_request=True):
-        response = self._check_response(api_call(), check_request)
-
-        return response
-
-    def _require_auth(self, api_call, check_request=True):
-        if self.grant is None:
-            if self._auto_auth:
-                logging.info("Automatically authenticating.")
-                self.auth(self.auth_username, self.auth_password)
-            else:
-                logging.error("Auth-required request made but no auth performed or credentials given.")
-                raise NotAuthenticated("Auth-required request made but no auth performed or credentials given", 401)
-
-        try:
-            response = self._check_response(api_call(), check_request)
-        except NotAuthorized as ex:
-            # Only reauth if the auth was expired
-            if ex.expired and self._auto_auth:
-                logging.info("Automatically authenticating [reauth] ([{0}] {1})".format(ex.code, ex.message))
-                self.auth(self.auth_username, self.auth_password)
-                response = self._check_response(api_call(), check_request)
-            else:
-                raise
-
-        return response
-
     def auth(self, username, password):
         # Check that we don't have a blank username/password
         if not isinstance(username, str) or username == "":
@@ -176,7 +164,7 @@ class Client:
         endpoint = endpoints.user_accessgrant.format(username)
         data = {"Password": password}
 
-        response = self._no_auth((lambda: self._post(endpoint, data=data)), check_request=False)
+        response = self.request(endpoint, endpoints.Methods.POST, data=data, check_request=False)
 
         if response["Status"] == 200:
             self.grant = response["Result"]
@@ -187,23 +175,17 @@ class Client:
         else:
             return False
 
-    def deauth(self, guid, access_token=None):
+    @require_auth
+    def deauth(self, guid):
         # Check that we don't have a blank guid
         if not isinstance(guid, str) or guid == "":
             raise ValueError("User GUID cannot be blank")
 
-        # Check for if a custom token was passed
-        if access_token is None:
-            access_token = self.grant
-        # Check that we don't have a blank access token
-        elif not isinstance(access_token, str) or access_token == "":
-            raise ValueError("Access Token cannot be blank")
-
         # Get the request together
         endpoint = endpoints.user_accessgrant.format(guid)
-        data = {"AccessGrant": access_token}
+        data = {"AccessGrant": self.grant}
 
-        response = self._require_auth((lambda: self._put(endpoint, access_token, data=data)))
+        response = self.request(endpoint, endpoints.Methods.PUT, auth=self.grant, data=data)
 
         if response["Status"] == 200:
             return True
@@ -215,6 +197,7 @@ class Client:
         self.auth_password = password
         self._auto_auth = True
 
+    @require_auth
     def user_account(self, identifier):
         # Check that we don't have a blank identifier
         if not isinstance(identifier, str) or identifier == "":
@@ -223,7 +206,7 @@ class Client:
         endpoint = endpoints.user.format(identifier)
 
         try:
-            response = self._require_auth(lambda: self._get(endpoint, self.grant))
+            response = self.request(endpoint, endpoints.Methods.GET, auth=self.grant)
         except NotAuthorized as ex:
             if not ex.expired:
                 raise WrongOwner(ex.message, ex.code)
@@ -232,6 +215,7 @@ class Client:
 
         return response["Result"]
 
+    @require_auth
     def user_publicdata(self, guid):
         # Check that we don't have a blank guid
         if not isinstance(guid, str) or guid == "":
@@ -239,7 +223,7 @@ class Client:
 
         endpoint = endpoints.user_publicdata_single.format(guid)
 
-        response = self._require_auth(lambda: self._get(endpoint, self.grant))
+        response = self.request(endpoint, endpoints.Methods.GET, auth=self.grant)
 
         if response["Status"] == 404:
             return None
@@ -266,13 +250,14 @@ class Client:
 
         endpoint = endpoints.uniquevalues_callsign.format(callsign)
 
-        response = self._no_auth(lambda: self._get(endpoint))
+        response = self.request(endpoint, endpoints.Methods.GET)
 
         if response["Status"] == 404:
             return None
         else:
             return response["Result"]["UserGuid"]
 
+    @require_auth
     def user_server(self, guid):
         # Check that we don't have a blank guid
         if not isinstance(guid, str) or guid == "":
@@ -280,13 +265,14 @@ class Client:
 
         endpoint = endpoints.server_user.format(guid)
 
-        response = self._require_auth(lambda: self._get(endpoint, self.grant))
+        response = self.request(endpoint, endpoints.Methods.GET, auth=self.grant)
 
         if response["Status"] == 404:
             return None
         else:
             return response["Result"]
 
+    @require_auth
     def user_stats(self, guid):
         if isinstance(guid, str):
             # Single request
@@ -294,20 +280,21 @@ class Client:
                 raise ValueError("User GUID cannot be blank")
 
             endpoint = endpoints.user_stat_single.format(guid)
-            response = self._require_auth(lambda: self._get(endpoint, self.grant))
+            response = self.request(endpoint, endpoints.Methods.GET, auth=self.grant)
         else:
             # Batch request
             if len(guid) == 0:
                 raise ValueError("List of user GUIDs cannot be empty")
 
             endpoint = endpoints.user_stat_batch.format()
-            response = self._require_auth(lambda: self._get(endpoint, self.grant, batch=guid))
+            response = self.request(endpoint, endpoints.Methods.GET, auth=self.grant, batch=guid)
 
         if response["Status"] == 404:
             return None
         else:
             return response["Result"]
 
+    @require_auth
     def server_list(self, guid=None):
         if guid is None:
             endpoint = endpoints.server.format()
@@ -318,7 +305,7 @@ class Client:
 
             endpoint = endpoints.server_single.format(guid)
 
-        response = self._require_auth(lambda: self._get(endpoint, self.grant))
+        response = self.request(endpoint, endpoints.Methods.GET, auth=self.grant)
 
         if response["Status"] == 404:
             return None
@@ -337,23 +324,25 @@ class Client:
 
         return found_server
 
+    @require_auth
     def matchmaking_advertisement(self, guid):
         # Check that we don't have a blank guid
         if not isinstance(guid, str) or guid == "":
             raise ValueError("Advertisement GUID cannot be blank")
         endpoint = endpoints.advertisement_single.format(guid)
 
-        response = self._require_auth(lambda: self._get(endpoint, self.grant))
+        response = self.request(endpoint, endpoints.Methods.GET, auth=self.grant)
 
         if response["Status"] == 404:
             return None
         else:
             return response["Result"]
 
+    @require_auth
     def matchmaking_advertisement_post(self, advertisement):
         endpoint = endpoints.advertisement.format()
 
-        response = self._require_auth(lambda: self._post(endpoint, self.grant, advertisement))
+        response = self.request(endpoint, endpoints.Methods.POST, auth=self.grant, data=advertisement)
 
         if response["Status"] == 403:
             raise WrongOwner(response["Message"], response["Status"])
@@ -416,13 +405,14 @@ class Client:
 
         return self.matchmaking_advertisement_post(advertisement)
 
+    @require_auth
     def matchmaking_advertisement_delete(self, guid):
         # Check that we don't have a blank guid
         if not isinstance(guid, str) or guid == "":
             raise ValueError("Advertisement GUID cannot be blank")
         endpoint = endpoints.advertisement_single.format(guid)
 
-        response = self._require_auth(lambda: self._delete(endpoint, self.grant))
+        response = self.request(endpoint, endpoints.Methods.DELETE, auth=self.grant)
 
         if response["Status"] == 403:
             raise WrongOwner(response["Message"], response["Status"])
@@ -433,26 +423,29 @@ class Client:
         else:
             return False
 
+    @require_auth
     def presence_access(self, guid):
         # Check that we don't have a blank guid
         if not isinstance(guid, str) or guid == "":
             raise ValueError("User GUID cannot be blank")
         endpoint = endpoints.presence_access.format(guid)
 
-        response = self._require_auth(lambda: self._get(endpoint, self.grant))
+        response = self.request(endpoint, endpoints.Methods.GET, auth=self.grant)
 
         return response["Result"]
 
+    @require_auth
     def presence_domain(self, guid):
         # Check that we don't have a blank guid
         if not isinstance(guid, str) or guid == "":
             raise ValueError("User GUID cannot be blank")
         endpoint = endpoints.presence_domain.format(guid)
 
-        response = self._require_auth(lambda: self._get(endpoint, self.grant))
+        response = self.request(endpoint, endpoints.Methods.GET, auth=self.grant)
 
         return response["Result"]
 
+    @require_auth
     def game_items(self, guid=None):
         if guid is None:
             endpoint = endpoints.item.format()
@@ -461,7 +454,7 @@ class Client:
                 raise ValueError("Item GUID cannot be blank")
             endpoint = endpoints.item_single.format(guid)
 
-        response = self._require_auth(lambda: self._get(endpoint, self.grant))
+        response = self.request(endpoint, endpoints.Methods.GET, auth=self.grant)
 
         if response["Status"] == 404:
             return None

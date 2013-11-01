@@ -71,11 +71,15 @@ class InternalServerError(ApiException):
     pass
 
 
-class BackendOverCapacity(ApiException):
+class ServiceUnavailable(ApiException):
     pass
 
 
 class WrongOwner(ApiException):
+    pass
+
+
+class InvalidRequest(ApiException):
     pass
 
 
