@@ -8,7 +8,7 @@ setup(name="HawkenApi",
       description="Hawken API Client Library",
       author="Andrew Hampe",
       author_email="andrew.hampe@gmail.com",
-      packages=["hawkenapi"],
+      packages=["hawkenapi", "hawkenapi.sleekxmpp"],
       classifiers=(
           'Development Status :: 3 - Alpha',
           'Intended Audience :: Developers',
