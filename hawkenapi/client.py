@@ -125,7 +125,7 @@ class Client:
             response = self._request_perform(request)
         except urllib.error.HTTPError as e:
             # Handle HTTP errors
-            if e.code not in (400, 500, 503):
+            if e.code == 503:
                 # Service unavailable (usually backend at capacity)
                 raise ServiceUnavailable(e.reason, e.code) from e
             elif e.code == 500:
