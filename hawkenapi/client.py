@@ -41,11 +41,12 @@ def require_auth(f):
                 response = f(self, *args, **kwargs)
             else:
                 raise
-        
+
         return response
     return auth_handler
 
 
+# Client
 class Client:
     def __init__(self, stack="services.live", scheme="http"):
         self.user_agent = ""
@@ -200,6 +201,12 @@ class Client:
             return False
 
     def auto_auth(self, username, password):
+        # Check that we don't have a blank username/password
+        if not isinstance(username, str) or username == "":
+            raise ValueError("Username cannot be blank")
+        if not isinstance(password, str) or password == "":
+            raise ValueError("Password cannot be blank")
+
         self.auth_username = username
         self.auth_password = password
         self._auto_auth = True
