@@ -113,6 +113,12 @@ class RequestError(Exception):
     pass
 
 
+class RetryLimitExceeded(Exception):
+    def __init__(self, attempts):
+        self.limit = attempts
+        super(Exception, self).__init__("Retry limit exceeded")
+
+
 def auth_exception(response):
     if NotAuthenticated.is_missing(response["Message"]):
         raise NotAuthenticated(response["Message"], response["Status"])

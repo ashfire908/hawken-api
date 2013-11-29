@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 # Hawken API interface
 
+import time
 import logging
 import urllib.request
 import urllib.error
@@ -9,7 +10,7 @@ import gzip
 import json
 from hawkenapi import endpoints
 from hawkenapi.exceptions import AuthenticationFailure, NotAuthenticated, NotAuthorized, InternalServerError, \
-    ServiceUnavailable, WrongOwner, InvalidRequest, InvalidBatch, auth_exception, RequestError
+    ServiceUnavailable, WrongOwner, InvalidRequest, InvalidBatch, auth_exception, RequestError, RetryLimitExceeded
 from hawkenapi.util import enum
 
 # Setup logging
@@ -474,3 +475,27 @@ class Client:
             return None
         else:
             return response["Result"]
+
+
+def retry_wrapper(endpoint, count, delay, *args, **kwargs):
+    last_exception = None
+    i = 0
+    success = False
+    response = None
+    while count > i:
+        try:
+            response = endpoint(*args, **kwargs)
+        except (InternalServerError, ServiceUnavailable, RequestError) as e:
+            logging.debug("Temporary error returned, automatically retrying... (Attempt {0} of {1})".format(i + 1, count))
+            last_exception = e
+            time.sleep(delay)
+        else:
+            success = True
+            break
+
+        i += 1
+
+    if success:
+        return response
+    else:
+        raise RetryLimitExceeded(count) from last_exception
