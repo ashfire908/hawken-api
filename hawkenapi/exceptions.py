@@ -109,6 +109,10 @@ class InvalidBatch(ApiException):
         return errors
 
 
+class RequestError(Exception):
+    pass
+
+
 def auth_exception(response):
     if NotAuthenticated.is_missing(response["Message"]):
         raise NotAuthenticated(response["Message"], response["Status"])

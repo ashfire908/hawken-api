@@ -4,11 +4,12 @@
 import logging
 import urllib.request
 import urllib.error
+import http.client
 import gzip
 import json
 from hawkenapi import endpoints
 from hawkenapi.exceptions import AuthenticationFailure, NotAuthenticated, NotAuthorized, InternalServerError, \
-    ServiceUnavailable, WrongOwner, InvalidRequest, InvalidBatch, auth_exception
+    ServiceUnavailable, WrongOwner, InvalidRequest, InvalidBatch, auth_exception, RequestError
 from hawkenapi.util import enum
 
 # Setup logging
@@ -123,6 +124,9 @@ class Client:
             request = self._request_prepare(endpoint, method, **kwargs)
             # Perform the request
             response = self._request_perform(request)
+        except http.client.BadStatusLine as e:
+            # Handle bad status error (network error)
+            raise RequestError("HTTP Bad Status") from e
         except urllib.error.HTTPError as e:
             # Handle HTTP errors
             if e.code == 503:
@@ -136,6 +140,9 @@ class Client:
                 raise InvalidRequest(e.reason, e.code) from e
             else:
                 raise
+        except urllib.error.URLError as e:
+            # Handle URL library errors
+            raise RequestError(e.reason) from e
 
         # Log the request
         logging.debug("{0[method]} {0[url]} {1}".format(response[1], response[0]["Status"]))
