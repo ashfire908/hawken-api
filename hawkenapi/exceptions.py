@@ -10,6 +10,9 @@ class ApiException(Exception):
         self.code = code
         super(ApiException, self).__init__(message)
 
+    def __str__(self):
+        return "Status {0}: {1}".format(self.code, self.message)
+
 
 class AuthenticationFailure(ApiException):
     _re_bad_pass = re.compile(r"^Access Grant Not Issued: Password Incorrect$")
