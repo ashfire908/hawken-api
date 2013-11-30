@@ -6,6 +6,10 @@ from sleekxmpp.plugins.base import base_plugin
 from sleekxmpp.plugins.xep_0004 import Form
 from sleekxmpp.xmlstream import register_stanza_plugin, ET
 from hawkenapi.sleekxmpp.stanza import StormId, PartyMemberData, PartyVoiceChannel
+from hawkenapi.util import enum
+
+
+CancelCode = enum(PARTYCANCEL="0", LEADERCANCEL="1", LEADERCHANGE="2", NOMATCH="3", MEMBERJOIN="4", MEMBERLEFT="5", MEMBERKICK="6")
 
 
 class Hawken_Party(base_plugin):
@@ -98,13 +102,13 @@ class Hawken_Party(base_plugin):
         # Send matchmaking start notice
         message.send()
 
-    def matchmaking_cancel(self, room, sender, sguid):
+    def matchmaking_cancel(self, room, sender, sguid, code=CancelCode.PARTYCANCEL):
         # Build the message
         message = self.xmpp.make_message(room, mtype="groupchat", mfrom=sender)
         memberdata = message["partymemberdata"]
         memberdata["infoName"] = "PartyMatchmakingCancel"
         memberdata["playerId"] = sguid
-        memberdata["infoValue"] = "1"
+        memberdata["infoValue"] = code
 
         # Send matchmaking cancel notice
         message.send()
@@ -120,13 +124,13 @@ class Hawken_Party(base_plugin):
         # Send deploy start notice
         message.send()
 
-    def deploy_cancel(self, room, sender, sguid):
+    def deploy_cancel(self, room, sender, sguid, code=CancelCode.PARTYCANCEL):
         # Build the message
         message = self.xmpp.make_message(room, mtype="groupchat", mfrom=sender)
         memberdata = message["partymemberdata"]
         memberdata["infoName"] = "DeployCancelData"
         memberdata["playerId"] = sguid
-        memberdata["infoValue"] = "1"
+        memberdata["infoValue"] = code
 
         # Send deploy cancel notice
         message.send()
