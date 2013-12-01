@@ -26,9 +26,9 @@ class Hawken_Party(base_plugin):
         register_stanza_plugin(Message, PartyMemberData)
         register_stanza_plugin(Message, PartyVoiceChannel)
 
-    def create(self, room, scallsign):
+    def create(self, room, callsign):
         # Join the room
-        self.xmpp.plugin["xep_0045"].joinMUC(room, scallsign, wait=True)
+        self.xmpp.plugin["xep_0045"].joinMUC(room, callsign, wait=True)
 
         # Create the room config
         form = Form()
@@ -40,39 +40,39 @@ class Hawken_Party(base_plugin):
         # Configure the room
         self.xmpp.plugin["xep_0045"].configureRoom(room, form=form)
 
-    def join(self, room, scallsign):
+    def join(self, room, callsign):
         # Join the room
-        self.xmpp.plugin["xep_0045"].joinMUC(room, scallsign)
+        self.xmpp.plugin["xep_0045"].joinMUC(room, callsign)
 
-    def leave(self, room, scallsign):
+    def leave(self, room, callsign):
         # Leave the room
-        self.xmpp.plugin["xep_0045"].leaveMUC(room, scallsign)
+        self.xmpp.plugin["xep_0045"].leaveMUC(room, callsign)
 
-    def invite(self, room, sender, sguid, scallsign, target, tcallsign, reason=""):
+    def invite(self, room, sender, scallsign, target, tcallsign, reason=""):
         # Send the invite to the player
-        self.xmpp.plugin["xep_0045"].invite(room, target, reason=reason, mfrom=sender)
+        self.xmpp.plugin["xep_0045"].invite(room, target, reason=reason, mfrom=sender.bare)
 
         # Build the message
-        message = self.xmpp.make_message(room, mtype="groupchat", mfrom=sender)
+        message = self.xmpp.make_message(room, mtype="groupchat", mfrom=sender.bare)
         memberdata = message["partymemberdata"]
         memberdata["infoName"] = "InvitePlayerToParty"
-        memberdata["playerId"] = sguid
+        memberdata["playerId"] = sender.user
         memberdata["infoValue"] = "{0} has invited {1} to the party.".format(scallsign, tcallsign)
 
         # Send invite notification
         message.send()
 
-    def message(self, room, sender, sguid, body):
+    def message(self, room, sender, body):
         # Build the message
-        message = self.xmpp.make_message(mto=room, mtype="groupchat", mfrom=sender)
+        message = self.xmpp.make_message(mto=room, mtype="groupchat", mfrom=sender.bare)
         message["body"] = body
-        message["stormid"].id = sguid
+        message["stormid"].id = sender.user
 
         # Send party message
         message.send()
 
     def kick(self, room, tcallsign):
-        # Do it by hand
+        # Create the Iq manually
         query = ET.Element("{http://jabber.org/protocol/muc#admin}query")
         item = ET.Element("{http://jabber.org/protocol/muc#admin}item", {"role": "none", "nick": tcallsign})
         query.append(item)
@@ -91,45 +91,45 @@ class Hawken_Party(base_plugin):
         # Set the target as the owner
         self.xmpp.plugin["xep_0045"].setAffiliation(room, nick=tcallsign, affiliation="owner")
 
-    def matchmaking_start(self, room, sender, sguid):
+    def matchmaking_start(self, room, sender):
         # Build the message
-        message = self.xmpp.make_message(room, mtype="groupchat", mfrom=sender)
+        message = self.xmpp.make_message(room, mtype="groupchat", mfrom=sender.bare)
         memberdata = message["partymemberdata"]
         memberdata["infoName"] = "PartyMatchmakingStart"
-        memberdata["playerId"] = sguid
+        memberdata["playerId"] = sender.user
         memberdata["infoValue"] = "NoData"
 
         # Send matchmaking start notice
         message.send()
 
-    def matchmaking_cancel(self, room, sender, sguid, code=CancelCode.PARTYCANCEL):
+    def matchmaking_cancel(self, room, sender, code=CancelCode.PARTYCANCEL):
         # Build the message
-        message = self.xmpp.make_message(room, mtype="groupchat", mfrom=sender)
+        message = self.xmpp.make_message(room, mtype="groupchat", mfrom=sender.bare)
         memberdata = message["partymemberdata"]
         memberdata["infoName"] = "PartyMatchmakingCancel"
-        memberdata["playerId"] = sguid
+        memberdata["playerId"] = sender.user
         memberdata["infoValue"] = code
 
         # Send matchmaking cancel notice
         message.send()
 
-    def deploy_start(self, room, sender, sguid, server):
+    def deploy_start(self, room, sender, server):
         # Build the message
-        message = self.xmpp.make_message(room, mtype="groupchat", mfrom=sender)
+        message = self.xmpp.make_message(room, mtype="groupchat", mfrom=sender.bare)
         memberdata = message["partymemberdata"]
         memberdata["infoName"] = "DeployPartyData"
-        memberdata["playerId"] = sguid
+        memberdata["playerId"] = sender.user
         memberdata["infoValue"] = server
 
         # Send deploy start notice
         message.send()
 
-    def deploy_cancel(self, room, sender, sguid, code=CancelCode.PARTYCANCEL):
+    def deploy_cancel(self, room, sender, code=CancelCode.PARTYCANCEL):
         # Build the message
-        message = self.xmpp.make_message(room, mtype="groupchat", mfrom=sender)
+        message = self.xmpp.make_message(room, mtype="groupchat", mfrom=sender.bare)
         memberdata = message["partymemberdata"]
         memberdata["infoName"] = "DeployCancelData"
-        memberdata["playerId"] = sguid
+        memberdata["playerId"] = sender.user
         memberdata["infoValue"] = code
 
         # Send deploy cancel notice

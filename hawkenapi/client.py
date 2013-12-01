@@ -14,7 +14,7 @@ from hawkenapi.exceptions import AuthenticationFailure, NotAuthenticated, NotAut
 from hawkenapi.util import enum
 
 # Setup logging
-logging = logging.getLogger("hawkenapi")
+logger = logging.getLogger(__name__)
 
 
 # Request flags
@@ -26,10 +26,10 @@ def require_auth(f):
     def auth_handler(self, *args, **kwargs):
         if self.grant is None:
             if self._auto_auth:
-                logging.info("Automatically authenticating.")
+                logger.info("Automatically authenticating.")
                 self.auth(self.auth_username, self.auth_password)
             else:
-                logging.error("Auth-required request made but no auth performed or credentials given.")
+                logger.error("Auth-required request made but no auth performed or credentials given.")
                 raise NotAuthenticated("Auth-required request made but no auth performed or credentials given", 401)
 
         try:
@@ -37,7 +37,7 @@ def require_auth(f):
         except NotAuthorized as ex:
             # Only reauth if the auth was expired
             if ex.expired and self._auto_auth:
-                logging.info("Automatically authenticating [reauth] ([{0}] {1})".format(ex.code, ex.message))
+                logger.info("Automatically authenticating [reauth] ([{0}] {1})".format(ex.code, ex.message))
                 self.auth(self.auth_username, self.auth_password)
                 response = f(self, *args, **kwargs)
             else:
@@ -100,9 +100,9 @@ class Client:
                 connection.close()
         except:
             try:
-                logging.error("Exception at response - {0} {1}".format(request.method, connection.url))
+                logger.error("Exception at response - {0} {1}".format(request.method, connection.url))
             except:
-                logging.error("Exception at request - {0} {1}".format(request.method, request.selector))
+                logger.error("Exception at request - {0} {1}".format(request.method, request.selector))
             raise
 
         # Decode the response
@@ -147,7 +147,7 @@ class Client:
             raise RequestError(e.reason) from e
 
         # Log the request
-        logging.debug("{0[method]} {0[url]} {1}".format(response[1], response[0]["Status"]))
+        logger.debug("{0[method]} {0[url]} {1}".format(response[1], response[0]["Status"]))
 
         # Check for general errors
         if response[0]["Status"] == 500:
@@ -486,7 +486,7 @@ def retry_wrapper(endpoint, count, delay, *args, **kwargs):
         try:
             response = endpoint(*args, **kwargs)
         except (InternalServerError, ServiceUnavailable, RequestError) as e:
-            logging.debug("Temporary error returned, automatically retrying... (Attempt {0} of {1})".format(i + 1, count))
+            logger.debug("Temporary error returned, automatically retrying... (Attempt {0} of {1})".format(i + 1, count))
             last_exception = e
             time.sleep(delay)
         else:
