@@ -351,6 +351,12 @@ class Client:
         if response["Status"] == 404:
             return None
         else:
+            try:
+                # Fix a bug in the API where a newline is appended to the server ip
+                response["Result"]["AssignedServerIp"] = response["Result"]["AssignedServerIp"].strip(r"\n")
+            except KeyError:
+                pass
+
             return response["Result"]
 
     @require_auth
