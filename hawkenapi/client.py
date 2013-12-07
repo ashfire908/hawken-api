@@ -492,7 +492,7 @@ def retry_wrapper(endpoint, count, delay, *args, **kwargs):
         try:
             response = endpoint(*args, **kwargs)
         except (InternalServerError, ServiceUnavailable, RequestError) as e:
-            logger.debug("Temporary error returned, automatically retrying... (Attempt {0} of {1})".format(i + 1, count))
+            logger.warning("Temporary error returned, automatically retrying... (Attempt {0} of {1})".format(i + 1, count))
             last_exception = e
             if count >= i:
                 time.sleep(delay)
