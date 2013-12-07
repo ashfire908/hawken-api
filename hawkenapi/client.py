@@ -8,6 +8,7 @@ import urllib.error
 import http.client
 import gzip
 import json
+import hawkenapi
 from hawkenapi import endpoints
 from hawkenapi.exceptions import AuthenticationFailure, NotAuthenticated, NotAuthorized, InternalServerError, \
     ServiceUnavailable, WrongOwner, InvalidRequest, InvalidBatch, auth_exception, RequestError, RetryLimitExceeded
@@ -50,7 +51,7 @@ def require_auth(f):
 # Client
 class Client:
     def __init__(self, stack="services.live", scheme="http"):
-        self.user_agent = ""
+        self.user_agent = "HawkenApi/{0}".format(hawkenapi.__version__)
         self.stack = stack
         self.scheme = scheme
         self.grant = None

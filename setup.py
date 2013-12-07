@@ -3,8 +3,8 @@
 
 from distutils.core import setup
 
-setup(name="HawkenApi",
-      version="0.1.3",
+setup(name="hawkenapi",
+      version="0.1.3.1",
       description="Hawken API Client Library",
       author="Andrew Hampe",
       author_email="andrew.hampe@gmail.com",
