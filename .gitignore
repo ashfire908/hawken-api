@@ -13,3 +13,4 @@ tcl/
 # IDE/Editor Files
 *.sublime-workspace
 .codeintel
+.idea/
