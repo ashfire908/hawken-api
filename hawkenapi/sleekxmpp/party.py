@@ -26,6 +26,10 @@ class Hawken_Party(base_plugin):
         register_stanza_plugin(Message, PartyMemberData)
         register_stanza_plugin(Message, PartyVoiceChannel)
 
+    def our_callsign(self, room):
+        # Get our callsign
+        return self.xmpp.plugin["xep_0045"].ourNicks[room]
+
     def create(self, room, callsign):
         # Join the room
         self.xmpp.plugin["xep_0045"].joinMUC(room, callsign, wait=True)
@@ -44,11 +48,11 @@ class Hawken_Party(base_plugin):
         # Join the room
         self.xmpp.plugin["xep_0045"].joinMUC(room, callsign)
 
-    def leave(self, room, callsign):
+    def leave(self, room):
         # Leave the room
-        self.xmpp.plugin["xep_0045"].leaveMUC(room, callsign)
+        self.xmpp.plugin["xep_0045"].leaveMUC(room, self.our_callsign(room))
 
-    def invite(self, room, sender, scallsign, target, tcallsign, reason=""):
+    def invite(self, room, sender, target, callsign, reason=""):
         # Send the invite to the player
         self.xmpp.plugin["xep_0045"].invite(room, target, reason=reason, mfrom=sender.bare)
 
@@ -57,7 +61,7 @@ class Hawken_Party(base_plugin):
         memberdata = message["partymemberdata"]
         memberdata["infoName"] = "InvitePlayerToParty"
         memberdata["playerId"] = sender.user
-        memberdata["infoValue"] = "{0} has invited {1} to the party.".format(scallsign, tcallsign)
+        memberdata["infoValue"] = "{0} has invited {1} to the party.".format(self.our_callsign(room), callsign)
 
         # Send invite notification
         message.send()
@@ -71,10 +75,10 @@ class Hawken_Party(base_plugin):
         # Send party message
         message.send()
 
-    def kick(self, room, tcallsign):
+    def kick(self, room, callsign):
         # Create the Iq manually
         query = ET.Element("{http://jabber.org/protocol/muc#admin}query")
-        item = ET.Element("{http://jabber.org/protocol/muc#admin}item", {"role": "none", "nick": tcallsign})
+        item = ET.Element("{http://jabber.org/protocol/muc#admin}item", {"role": "none", "nick": callsign})
         query.append(item)
         iq = self.xmpp.makeIqSet(query)
         iq["to"] = room
@@ -89,7 +93,7 @@ class Hawken_Party(base_plugin):
 
     def leader_set(self, room, tcallsign):
         # Set the target as the owner
-        self.xmpp.plugin["xep_0045"].setAffiliation(room, nick=tcallsign, affiliation="owner")
+        self.xmpp.plugin["xep_0045"].setAffiliation(room, nick=callsign, affiliation="owner")
 
     def matchmaking_start(self, room, sender):
         # Build the message
