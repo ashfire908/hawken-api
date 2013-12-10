@@ -91,7 +91,16 @@ class Hawken_Party(base_plugin):
             return False
         return True
 
-    def leader_set(self, room, tcallsign):
+    def leader_get(self, room):
+        roster = self.xmpp.plugin["xep_0045"].getRoster(room)
+        if roster is not None:
+            for nick in roster:
+                if self.xmpp.plugin["xep_0045"].rooms[room][nick]["affiliation"] == "owner":
+                    return nick
+
+        return None
+
+    def leader_set(self, room, callsign):
         # Set the target as the owner
         self.xmpp.plugin["xep_0045"].setAffiliation(room, nick=callsign, affiliation="owner")
 
