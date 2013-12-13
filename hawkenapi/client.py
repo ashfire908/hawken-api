@@ -354,7 +354,7 @@ class Client:
         else:
             try:
                 # Fix a bug in the API where a newline is appended to the server ip
-                response["Result"]["AssignedServerIp"] = response["Result"]["AssignedServerIp"].strip(r"\n")
+                response["Result"]["AssignedServerIp"] = response["Result"]["AssignedServerIp"].strip("\n")
             except KeyError:
                 pass
 
