@@ -50,15 +50,20 @@ def require_auth(f):
 
 # Client
 class Client:
-    def __init__(self, stack="services.live", scheme="http"):
+    def __init__(self, host=None, stack=None, scheme="http"):
         self.user_agent = "HawkenApi/{0}".format(hawkenapi.__version__)
-        self.stack = stack
+        if host is not None:
+            self.host = host
+        elif stack is not None:
+            self.host = "{0}.hawken.meteor-ent.com".format(stack)
+        else:
+            self.host = "services.live.hawken.meteor-ent.com"
         self.scheme = scheme
         self.grant = None
         self._auto_auth = False
 
     def _build_endpoint(self, endpoint):
-        return "{0}://{1}.hawken.meteor-ent.com/{2}".format(self.scheme, self.stack, endpoint)
+        return "{0}://{1}/{2}".format(self.scheme, self.host, endpoint)
 
     def _request_prepare(self, endpoint, method, auth=None, data=False, batch=None):
         # Encode data
