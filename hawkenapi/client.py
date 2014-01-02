@@ -376,14 +376,14 @@ class Client:
 
         return response["Result"]
 
-    def matchmaking_advertisement_post_matchmaking(self, gameversion, gametype, region, owner, users, party=None):
+    def matchmaking_advertisement_post_matchmaking(self, gameversion, region, gametype, owner, users, party=None):
         # Check the parameters given
         if not isinstance(gameversion, str) or gameversion == "":
             raise ValueError("Game Version cannot be blank")
-        if not isinstance(gametype, str) or gametype == "":
-            raise ValueError("Game Type cannot be blank")
         if not isinstance(region, str) or region == "":
             raise ValueError("Region cannot be blank")
+        if not isinstance(gametype, str) or gametype == "":
+            raise ValueError("Game Type cannot be blank")
         if not isinstance(owner, str) or owner == "":
             raise ValueError("Owner cannot be blank")
         if len(users) == 0:
