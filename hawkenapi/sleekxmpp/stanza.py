@@ -1,6 +1,9 @@
 # -*- coding: utf-8 -*-
 
 from sleekxmpp.xmlstream.stanzabase import ElementBase
+from hawkenapi.util import enum
+
+MemberDataCodes = enum(InvitePlayer="InvitePlayerToParty", MatchmakingStart="PartyMatchmakingStart", MatchmakingCancel="PartyMatchmakingCancel", DeployParty="DeployPartyData", DeployCancel="DeployCancelData")
 
 
 class StormId(ElementBase):
@@ -26,11 +29,11 @@ class PartyMemberData(ElementBase):
     name = "partymemberdata"
     namespace = "urn:meteor:partymemberdata"
     plugin_attrib = "partymemberdata"
-    interfaces = set(("playerId", "infoName", "infoValue"))
+    interfaces = {"playerId", "infoName", "infoValue"}
 
 
 class PartyVoiceChannel(ElementBase):
     name = "voicechanneldata"
     namespace = "urn:meteor:partyvoicechannel"
     plugin_attrib = "partyvoicechannel"
-    interfaces = set(("voiceurl"))
+    interfaces = {"voiceurl", }
