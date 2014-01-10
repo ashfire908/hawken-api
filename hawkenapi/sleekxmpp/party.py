@@ -75,7 +75,7 @@ class Hawken_Party(base_plugin):
         # Build the message
         message = self.xmpp.make_message(mto=room, mtype="groupchat", mfrom=sender.bare)
         message["body"] = body
-        message["stormid"].id = sender.user
+        message["stormid"] = sender.user
 
         # Send party message
         message.send()
@@ -84,7 +84,7 @@ class Hawken_Party(base_plugin):
         # Send the invite to the player
         # Game client does not recognize this invite type
         #self.xmpp.plugin["xep_0045"].invite(room, target, reason=reason, mfrom=sender.bare)
-        
+
         # Manually create the invite
         msg = self.xmpp.make_message(mto=room, mfrom=sender.bare)
         x = ET.Element('{http://jabber.org/protocol/muc#user}x')

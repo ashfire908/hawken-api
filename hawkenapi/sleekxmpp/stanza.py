@@ -6,23 +6,32 @@ from hawkenapi.util import enum
 MemberDataCodes = enum(InvitePlayer="InvitePlayerToParty", MatchmakingStart="PartyMatchmakingStart", MatchmakingCancel="PartyMatchmakingCancel", DeployParty="DeployPartyData", DeployCancel="DeployCancelData")
 
 
+class GameInvite(ElementBase):
+    name = "invite"
+    namespace = "urn:meteor:invite"
+    plugin_attrib = "invite"
+    interfaces = {"invite", }
+    is_extension = True
+
+    def get_invite(self):
+        return self.xml.text
+
+    def set_invite(self, value):
+        self.xml.text = value
+
+
 class StormId(ElementBase):
     name = "stormid"
     namespace = "urn:meteor:stormidext"
     plugin_attrib = "stormid"
-    interfaces = set(())
+    interfaces = {"stormid", }
+    is_extension = True
 
-    def __getattr__(self, name):
-        if name == "id":
-            return self.xml.text
-        else:
-            raise AttributeError
+    def get_stormid(self):
+        return self.xml.text
 
-    def __setattr__(self, name, value):
-        if name == "id":
-            self.xml.text = value
-        else:
-            super(StormId, self).__setattr__(name, value)
+    def set_stormid(self, value):
+        self.xml.text = value
 
 
 class PartyMemberData(ElementBase):
