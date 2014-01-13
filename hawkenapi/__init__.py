@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 
 # Pull in the client
-from hawkenapi.client import Client
+from hawkenapi.interface import Interface
 
-__version__ = "0.1.6"
+__version__ = "0.2"

@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-# Hawken API interface
+# Hawken API Interface
 
 import time
 import logging
@@ -48,8 +48,8 @@ def require_auth(f):
     return auth_handler
 
 
-# Client
-class Client:
+# Interface
+class Interface:
     def __init__(self, host=None, stack=None, scheme="http"):
         self.user_agent = "HawkenApi/{0}".format(hawkenapi.__version__)
         if host is not None:
