@@ -189,8 +189,8 @@ class Client:
         return self._wrapper(self._interface.matchmaking_advertisement, self.grant, guid)
 
     @require_auth
-    def post_matchmaking_advertisement(self, gameversion, region, gametype, users, party=None):
-        advertisement = self._interface.generate_advertisement_matchmaking(gameversion, region, gametype, self.guid, users, party)
+    def post_matchmaking_advertisement(self, gameversion, region, users, gametype=None, party=None):
+        advertisement = self._interface.generate_advertisement_matchmaking(gameversion, region, self.guid, users, gametype, party)
 
         return self._wrapper(self._interface.matchmaking_advertisement_post, self.grant, advertisement)
 

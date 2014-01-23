@@ -319,26 +319,28 @@ class Interface:
         else:
             return False
 
-    def generate_advertisement_matchmaking(self, gameversion, region, gametype, owner, users, party=None):
+    def generate_advertisement_matchmaking(self, gameversion, region, owner, users, gametype=None, party=None):
         # Check the parameters given
         if not isinstance(gameversion, str) or gameversion == "":
             raise ValueError("Game Version cannot be blank")
         if not isinstance(region, str) or region == "":
             raise ValueError("Region cannot be blank")
-        if not isinstance(gametype, str) or gametype == "":
-            raise ValueError("Game Type cannot be blank")
         if not isinstance(owner, str) or owner == "":
             raise ValueError("Owner cannot be blank")
         if len(users) == 0:
             raise ValueError("Users list cannot be empty")
 
         advertisement = {
-            "GameType": gametype,
             "GameVersion": gameversion,
             "OwnerGuid": owner,
             "Region": region,
             "Users": users
         }
+
+        if gametype is not None:
+            if not isinstance(gametype, str) or gametype == "":
+                raise ValueError("Game Type cannot be blank")
+            advertisement["GameType"] = gametype
 
         if party is not None:
             if not isinstance(party, str) or party == "":
