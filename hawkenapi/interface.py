@@ -1,7 +1,6 @@
 # -*- coding: utf-8 -*-
-# Hawken API Interface
+# Low-level API Interface
 
-import time
 import logging
 import urllib.request
 import urllib.error
@@ -10,42 +9,15 @@ import gzip
 import json
 import hawkenapi
 from hawkenapi import endpoints
-from hawkenapi.exceptions import AuthenticationFailure, NotAuthenticated, NotAuthorized, InternalServerError, \
-    ServiceUnavailable, WrongOwner, InvalidRequest, InvalidBatch, auth_exception, RequestError, RetryLimitExceeded
+from hawkenapi.exceptions import AuthenticationFailure, NotAuthorized, InternalServerError, \
+    ServiceUnavailable, WrongOwner, InvalidRequest, InvalidBatch, auth_exception, RequestError
 from hawkenapi.util import enum
 
 # Setup logging
 logger = logging.getLogger(__name__)
 
-
 # Request flags
 RequestFlags = enum(BATCH="batch")
-
-
-# Decorators
-def require_auth(f):
-    def auth_handler(self, *args, **kwargs):
-        if self.grant is None:
-            if self._auto_auth:
-                logger.info("Automatically authenticating.")
-                self.auth(self.auth_username, self.auth_password)
-            else:
-                logger.error("Auth-required request made but no auth performed or credentials given.")
-                raise NotAuthenticated("Auth-required request made but no auth performed or credentials given", 401)
-
-        try:
-            response = f(self, *args, **kwargs)
-        except NotAuthorized as ex:
-            # Only reauth if the auth was expired
-            if ex.expired and self._auto_auth:
-                logger.info("Automatically authenticating [reauth] ([{0}] {1})".format(ex.code, ex.message))
-                self.auth(self.auth_username, self.auth_password)
-                response = f(self, *args, **kwargs)
-            else:
-                raise
-
-        return response
-    return auth_handler
 
 
 # Interface
@@ -59,8 +31,6 @@ class Interface:
         else:
             self.host = "services.live.hawken.meteor-ent.com"
         self.scheme = scheme
-        self.grant = None
-        self._auto_auth = False
 
     def _build_endpoint(self, endpoint):
         return "{0}://{1}/{2}".format(self.scheme, self.host, endpoint)
@@ -182,44 +152,30 @@ class Interface:
         response = self.request(endpoint, endpoints.Methods.POST, data=data, check_request=False)
 
         if response["Status"] == 200:
-            self.grant = response["Result"]
-            return True
+            return response["Result"]
         elif response["Status"] == 401 or response["Status"] == 404 or response["Status"] == 400:
             # No such user/Bad password/Blank password
             raise AuthenticationFailure(response["Message"], response["Status"])
         else:
             return False
 
-    @require_auth
-    def deauth(self, guid):
+    def deauth(self, grant, guid):
         # Check that we don't have a blank guid
         if not isinstance(guid, str) or guid == "":
             raise ValueError("User GUID cannot be blank")
 
         # Get the request together
         endpoint = endpoints.user_accessgrant.format(guid)
-        data = {"AccessGrant": self.grant}
+        data = {"AccessGrant": grant}
 
-        response = self.request(endpoint, endpoints.Methods.PUT, auth=self.grant, data=data)
+        response = self.request(endpoint, endpoints.Methods.PUT, auth=grant, data=data)
 
         if response["Status"] == 200:
             return True
         else:
             return False
 
-    def auto_auth(self, username, password):
-        # Check that we don't have a blank username/password
-        if not isinstance(username, str) or username == "":
-            raise ValueError("Username cannot be blank")
-        if not isinstance(password, str) or password == "":
-            raise ValueError("Password cannot be blank")
-
-        self.auth_username = username
-        self.auth_password = password
-        self._auto_auth = True
-
-    @require_auth
-    def user_account(self, identifier):
+    def user_account(self, grant, identifier):
         # Check that we don't have a blank identifier
         if not isinstance(identifier, str) or identifier == "":
             raise ValueError("Identifier cannot be blank")
@@ -227,7 +183,7 @@ class Interface:
         endpoint = endpoints.user.format(identifier)
 
         try:
-            response = self.request(endpoint, endpoints.Methods.GET, auth=self.grant)
+            response = self.request(endpoint, endpoints.Methods.GET, auth=grant)
         except NotAuthorized as ex:
             if not ex.expired:
                 raise WrongOwner(ex.message, ex.code)
@@ -236,33 +192,18 @@ class Interface:
 
         return response["Result"]
 
-    @require_auth
-    def user_publicdata(self, guid):
+    def user_publicdata(self, grant, guid):
         # Check that we don't have a blank guid
         if not isinstance(guid, str) or guid == "":
             raise ValueError("User GUID cannot be blank")
 
         endpoint = endpoints.user_publicdata_single.format(guid)
-
-        response = self.request(endpoint, endpoints.Methods.GET, auth=self.grant)
+        response = self.request(endpoint, endpoints.Methods.GET, auth=grant)
 
         if response["Status"] == 404:
             return None
         else:
             return response["Result"]
-
-    def user_callsign(self, guid):
-        response = self.user_publicdata(guid)
-
-        # Some users don't have a callsign
-        if response is not None:
-            try:
-                return response["UniqueCaseInsensitive_Callsign"]
-            except KeyError:
-                # Catch it in the following line
-                pass
-
-        return None
 
     def user_guid(self, callsign):
         # Check that we don't have a blank callsign
@@ -270,7 +211,6 @@ class Interface:
             raise ValueError("Callsign cannot be blank")
 
         endpoint = endpoints.uniquevalues_callsign.format(callsign)
-
         response = self.request(endpoint, endpoints.Methods.GET)
 
         if response["Status"] == 404:
@@ -278,81 +218,71 @@ class Interface:
         else:
             return response["Result"]["UserGuid"]
 
-    @require_auth
-    def user_server(self, guid):
+    def user_server(self, grant, guid):
         # Check that we don't have a blank guid
         if not isinstance(guid, str) or guid == "":
             raise ValueError("User GUID cannot be blank")
 
         endpoint = endpoints.server_user.format(guid)
-
-        response = self.request(endpoint, endpoints.Methods.GET, auth=self.grant)
-
-        if response["Status"] == 404:
-            return None
-        else:
-            return response["Result"]
-
-    @require_auth
-    def user_stats(self, guid):
-        if isinstance(guid, str):
-            # Single request
-            if guid == "":
-                raise ValueError("User GUID cannot be blank")
-
-            endpoint = endpoints.user_stat_single.format(guid)
-            response = self.request(endpoint, endpoints.Methods.GET, auth=self.grant)
-        else:
-            # Batch request
-            if len(guid) == 0:
-                raise ValueError("List of user GUIDs cannot be empty")
-
-            endpoint = endpoints.user_stat_batch.format()
-            response = self.request(endpoint, endpoints.Methods.GET, auth=self.grant, batch=guid)
+        response = self.request(endpoint, endpoints.Methods.GET, auth=grant)
 
         if response["Status"] == 404:
             return None
         else:
             return response["Result"]
 
-    @require_auth
-    def server_list(self, guid=None):
-        if guid is None:
-            endpoint = endpoints.server.format()
-        else:
-            # Check that we don't have a blank guid
-            if not isinstance(guid, str) or guid == "":
-                raise ValueError("Server GUID cannot be blank")
+    def user_stats_batch(self, grant, guids):
+        # Batch request
+        if len(guids) == 0:
+            raise ValueError("List of user GUIDs cannot be empty")
 
-            endpoint = endpoints.server_single.format(guid)
-
-        response = self.request(endpoint, endpoints.Methods.GET, auth=self.grant)
+        endpoint = endpoints.user_stat_batch.format()
+        response = self.request(endpoint, endpoints.Methods.GET, auth=grant, batch=guids)
 
         if response["Status"] == 404:
             return None
         else:
             return response["Result"]
 
-    def server_by_name(self, name):
-        server_list = self.server_list()
+    def user_stats_single(self, grant, guid):
+        # Single request
+        if guid == "":
+            raise ValueError("User GUID cannot be blank")
 
-        found_server = None
-        name = name.lower()
-        for server in server_list:
-            if server["ServerName"].lower() == name:
-                found_server = server
-                break
+        endpoint = endpoints.user_stat_single.format(guid)
+        response = self.request(endpoint, endpoints.Methods.GET, auth=grant)
 
-        return found_server
+        if response["Status"] == 404:
+            return None
+        else:
+            return response["Result"]
 
-    @require_auth
-    def matchmaking_advertisement(self, guid):
+    def server_list(self, grant):
+        endpoint = endpoints.server.format()
+        response = self.request(endpoint, endpoints.Methods.GET, auth=grant)
+
+        return response["Result"]
+
+    def server_single(self, grant, guid):
+        # Check that we don't have a blank guid
+        if not isinstance(guid, str) or guid == "":
+            raise ValueError("Server GUID cannot be blank")
+
+        endpoint = endpoints.server_single.format(guid)
+        response = self.request(endpoint, endpoints.Methods.GET, auth=grant)
+
+        if response["Status"] == 404:
+            return None
+        else:
+            return response["Result"]
+
+    def matchmaking_advertisement(self, grant, guid):
         # Check that we don't have a blank guid
         if not isinstance(guid, str) or guid == "":
             raise ValueError("Advertisement GUID cannot be blank")
-        endpoint = endpoints.advertisement_single.format(guid)
 
-        response = self.request(endpoint, endpoints.Methods.GET, auth=self.grant)
+        endpoint = endpoints.advertisement_single.format(guid)
+        response = self.request(endpoint, endpoints.Methods.GET, auth=grant)
 
         if response["Status"] == 404:
             return None
@@ -365,18 +295,33 @@ class Interface:
 
             return response["Result"]
 
-    @require_auth
-    def matchmaking_advertisement_post(self, advertisement):
+    def matchmaking_advertisement_post(self, grant, advertisement):
         endpoint = endpoints.advertisement.format()
-
-        response = self.request(endpoint, endpoints.Methods.POST, auth=self.grant, data=advertisement)
+        response = self.request(endpoint, endpoints.Methods.POST, auth=grant, data=advertisement)
 
         if response["Status"] == 403:
             raise WrongOwner(response["Message"], response["Status"])
 
         return response["Result"]
 
-    def matchmaking_advertisement_post_matchmaking(self, gameversion, region, gametype, owner, users, party=None):
+    def matchmaking_advertisement_delete(self, grant, guid):
+        # Check that we don't have a blank guid
+        if not isinstance(guid, str) or guid == "":
+            raise ValueError("Advertisement GUID cannot be blank")
+
+        endpoint = endpoints.advertisement_single.format(guid)
+        response = self.request(endpoint, endpoints.Methods.DELETE, auth=grant)
+
+        if response["Status"] == 403:
+            raise WrongOwner(response["Message"], response["Status"])
+        if response["Status"] == 404:
+            return None
+        elif response["Status"] == 200:
+            return True
+        else:
+            return False
+
+    def generate_advertisement_matchmaking(self, gameversion, region, gametype, owner, users, party=None):
         # Check the parameters given
         if not isinstance(gameversion, str) or gameversion == "":
             raise ValueError("Game Version cannot be blank")
@@ -402,9 +347,9 @@ class Interface:
                 raise ValueError("Party GUID cannot be blank")
             advertisement["PartyGuid"] = party
 
-        return self.matchmaking_advertisement_post(advertisement)
+        return advertisement
 
-    def matchmaking_advertisement_post_server(self, gameversion, region, server, owner, users, party=None):
+    def generate_advertisement_server(self, gameversion, region, server, owner, users, party=None):
         # Check the parameters given
         if not isinstance(gameversion, str) or gameversion == "":
             raise ValueError("Game Version cannot be blank")
@@ -430,85 +375,42 @@ class Interface:
                 raise ValueError("Party GUID cannot be blank")
             advertisement["PartyGuid"] = party
 
-        return self.matchmaking_advertisement_post(advertisement)
+        return advertisement
 
-    @require_auth
-    def matchmaking_advertisement_delete(self, guid):
-        # Check that we don't have a blank guid
-        if not isinstance(guid, str) or guid == "":
-            raise ValueError("Advertisement GUID cannot be blank")
-        endpoint = endpoints.advertisement_single.format(guid)
-
-        response = self.request(endpoint, endpoints.Methods.DELETE, auth=self.grant)
-
-        if response["Status"] == 403:
-            raise WrongOwner(response["Message"], response["Status"])
-        if response["Status"] == 404:
-            return None
-        elif response["Status"] == 200:
-            return True
-        else:
-            return False
-
-    @require_auth
-    def presence_access(self, guid):
+    def presence_access(self, grant, guid):
         # Check that we don't have a blank guid
         if not isinstance(guid, str) or guid == "":
             raise ValueError("User GUID cannot be blank")
+
         endpoint = endpoints.presence_access.format(guid)
-
-        response = self.request(endpoint, endpoints.Methods.GET, auth=self.grant)
+        response = self.request(endpoint, endpoints.Methods.GET, auth=grant)
 
         return response["Result"]
 
-    @require_auth
-    def presence_domain(self, guid):
+    def presence_domain(self, grant, guid):
         # Check that we don't have a blank guid
         if not isinstance(guid, str) or guid == "":
             raise ValueError("User GUID cannot be blank")
-        endpoint = endpoints.presence_domain.format(guid)
 
-        response = self.request(endpoint, endpoints.Methods.GET, auth=self.grant)
+        endpoint = endpoints.presence_domain.format(guid)
+        response = self.request(endpoint, endpoints.Methods.GET, auth=grant)
 
         return response["Result"]
 
-    @require_auth
-    def game_items(self, guid=None):
-        if guid is None:
-            endpoint = endpoints.item.format()
-        else:
-            if not isinstance(guid, str) or guid == "":
-                raise ValueError("Item GUID cannot be blank")
-            endpoint = endpoints.item_single.format(guid)
+    def game_items(self, grant):
+        endpoint = endpoints.item.format()
+        response = self.request(endpoint, endpoints.Methods.GET, auth=grant)
 
-        response = self.request(endpoint, endpoints.Methods.GET, auth=self.grant)
+        return response["Result"]
+
+    def game_items_single(self, grant, guid):
+        if not isinstance(guid, str) or guid == "":
+            raise ValueError("Item GUID cannot be blank")
+
+        endpoint = endpoints.item_single.format(guid)
+        response = self.request(endpoint, endpoints.Methods.GET, auth=grant)
 
         if response["Status"] == 404:
             return None
         else:
             return response["Result"]
-
-
-def retry_wrapper(endpoint, count, delay, *args, **kwargs):
-    last_exception = None
-    i = 0
-    success = False
-    response = None
-    while count > i:
-        try:
-            response = endpoint(*args, **kwargs)
-        except (InternalServerError, ServiceUnavailable, RequestError) as e:
-            logger.warning("Temporary error returned, automatically retrying... (Attempt {0} of {1})".format(i + 1, count))
-            last_exception = e
-            if count >= i:
-                time.sleep(delay)
-        else:
-            success = True
-            break
-
-        i += 1
-
-    if success:
-        return response
-    else:
-        raise RetryLimitExceeded(count) from last_exception
