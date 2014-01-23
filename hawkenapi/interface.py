@@ -287,11 +287,9 @@ class Interface:
         if response["Status"] == 404:
             return None
         else:
-            try:
-                # Fix a bug in the API where a newline is appended to the server ip
+            # Fix a bug in the API where a newline is appended to the server ip
+            if response["Result"]["AssignedServerIp"] is not None:
                 response["Result"]["AssignedServerIp"] = response["Result"]["AssignedServerIp"].strip("\n")
-            except KeyError:
-                pass
 
             return response["Result"]
 
