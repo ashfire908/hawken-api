@@ -114,8 +114,9 @@ class RequestError(Exception):
 
 
 class RetryLimitExceeded(Exception):
-    def __init__(self, attempts):
+    def __init__(self, attempts, exception):
         self.limit = attempts
+        self.last_exception = exception
         super(Exception, self).__init__("Retry limit exceeded")
 
 
