@@ -144,9 +144,9 @@ class Hawken_Party(base_plugin):
         # Send matchmaking cancel notice
         self._party_notice(room, sender, MemberDataCodes.MatchmakingCancel, code)
 
-    def deploy_start(self, room, sender, server):
+    def deploy_start(self, room, sender, guid, ip, port):
         # Send deploy start notice
-        self._party_notice(room, sender, MemberDataCodes.DeployParty, server)
+        self._party_notice(room, sender, MemberDataCodes.DeployParty, ";".join((guid, ip, str(port))))
 
     def deploy_cancel(self, room, sender, code=CancelCode.PARTYCANCEL):
         # Send deploy cancel notice
