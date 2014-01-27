@@ -175,14 +175,13 @@ class Client:
     def get_server_by_name(self, name):
         server_list = self._wrapper(self._interface.server_list, self.grant)
 
-        found_server = None
+        servers = []
         name = name.lower()
         for server in server_list:
             if server["ServerName"].lower() == name:
-                found_server = server
-                break
+                servers.append(server)
 
-        return found_server
+        return servers
 
     @require_auth
     def get_advertisement(self, guid):
