@@ -287,6 +287,12 @@ class Interface:
         if response["Status"] == 404:
             return None
         else:
+            # Fix a bug where the API marks a incomplete request as ready
+            if response["Result"]["ReadyToDeliver"] and \
+               (response["Result"]["AssignedServerIp"] in (None, "") or response["Result"]["AssignedServerPort"] == 0):
+                response["Result"]["ReadyToDeliver"] = False
+                logger.debug("Unmarked ready to deliver on incomplete reservation.")
+            
             # Fix a bug in the API where a newline is appended to the server ip
             if response["Result"]["AssignedServerIp"] is not None:
                 response["Result"]["AssignedServerIp"] = response["Result"]["AssignedServerIp"].strip("\n")
