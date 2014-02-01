@@ -10,7 +10,8 @@ import json
 import hawkenapi
 from hawkenapi import endpoints
 from hawkenapi.exceptions import AuthenticationFailure, NotAuthorized, InternalServerError, \
-    ServiceUnavailable, WrongOwner, InvalidRequest, InvalidBatch, auth_exception, RequestError
+    ServiceUnavailable, WrongOwner, InvalidRequest, InvalidBatch, InvalidResponse, auth_exception, \
+    RequestError
 from hawkenapi.util import enum
 
 # Setup logging
@@ -296,6 +297,13 @@ class Interface:
             # Fix a bug in the API where a newline is appended to the server ip
             if response["Result"]["AssignedServerIp"] is not None:
                 response["Result"]["AssignedServerIp"] = response["Result"]["AssignedServerIp"].strip("\n")
+
+            # Check for a server mismatch
+            if response["Result"]["ReadyToDeliver"] and \
+               response["Result"]["RequestedServerGuid"] != "00000000-0000-0000-0000-000000000000" and \
+               response["Result"]["AssignedServerGuid"] != response["Result"]["RequestedServerGuid"]:
+                logger.error("Requested server GUID does not matched assigned server GUID.")
+                raise InvalidResponse("Requested server GUID does not matched assigned server GUID", response["Status"], response["Result"])
 
             return response["Result"]
 

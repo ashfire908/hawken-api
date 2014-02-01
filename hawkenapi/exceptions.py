@@ -86,6 +86,15 @@ class InvalidRequest(ApiException):
     pass
 
 
+class InvalidResponse(ApiException):
+    def __init__(self, message, code, result):
+        self.result = result
+        super(InvalidResponse, self).__init__(message, code)
+
+    def __str__(self):
+        return self.message
+
+
 class InvalidBatch(ApiException):
     def __init__(self, message, code, result):
         self.result = result
