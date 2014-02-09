@@ -17,7 +17,7 @@ logger = logging.getLogger(__name__)
 def require_auth(f):
     def auth_handler(self, *args, **kwargs):
         # Check if we have authenticated
-        if self.grant is None:
+        if not self.authed:
             logger.error("Auth-required request made but no authentication has been performed.")
             raise NotAuthenticated("Client has not authenticated to the API", 401)
         # Check if the grant has expired
@@ -102,6 +102,10 @@ class Client:
 
     def _reauth(self):
         return self.login(self._username, self._password)
+
+    @property
+    def authed(self):
+        return self.grant is not None
 
     def login(self, username, password):
         # Auth to the API
