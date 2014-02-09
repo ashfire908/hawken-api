@@ -122,7 +122,7 @@ class Client:
     @require_auth
     def logout(self):
         try:
-            result = self._wrapper(self._interface.deauth, self.grant, self.guid)
+            result = self._wrapper(self._interface.deauth, str(self.grant), self.guid)
         finally:
             # Reset the auth info
             self.grant = None
