@@ -3,6 +3,8 @@
 from sleekxmpp import Message
 from sleekxmpp.plugins.base import base_plugin
 from sleekxmpp.xmlstream import register_stanza_plugin, ET
+from sleekxmpp.xmlstream.handler import Callback
+from sleekxmpp.xmlstream.matcher import StanzaPath
 from hawkenapi.sleekxmpp.stanza import StormId, PartyMemberData, PartyVoiceChannel, MemberDataCodes
 from hawkenapi.util import enum
 
@@ -24,6 +26,15 @@ class Hawken_Party(base_plugin):
         register_stanza_plugin(Message, PartyMemberData)
         register_stanza_plugin(Message, PartyVoiceChannel)
 
+        # Register Handler
+        self.xmpp.register_handler(
+            Callback("Hawken PartyMemberData",
+                     StanzaPath("message@type=groupchat/partymemberdata"),
+                     self._handle_partymemberdata))
+
+    def plugin_end(self):
+        self.xmpp.remove_handler("Hawken PartyMemberData")
+
     def _party_notice(self, room, sender, name, value):
         # Build the party notice
         message = self.xmpp.make_message(room, mtype="groupchat", mfrom=sender.bare)
@@ -33,6 +44,10 @@ class Hawken_Party(base_plugin):
 
         # Send invite notification
         message.send()
+
+    def _handle_partymemberdata(self, msg):
+        self.xmpp.event('groupchat_partymemberdata', msg)
+        self.xmpp.event('muc::%s::partymemberdata' % msg['from'].bare, msg)
 
     def get_joined_rooms(self):
         # Get joined rooms
