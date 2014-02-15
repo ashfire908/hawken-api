@@ -97,23 +97,7 @@ class Hawken_Party(base_plugin):
 
     def invite(self, room, sender, target, callsign, reason=None):
         # Send the invite to the player
-        # Game client does not recognize this invite type
-        #self.xmpp.plugin["xep_0045"].invite(room, target, reason=reason, mfrom=sender.bare)
-
-        # Manually create the invite
-        msg = self.xmpp.make_message(mto=room, mfrom=sender.bare)
-        x = ET.Element('{http://jabber.org/protocol/muc#user}x')
-        invite = ET.Element('{http://jabber.org/protocol/muc#user}invite', {'to': target})
-        if reason:
-            rxml = ET.Element('{http://jabber.org/protocol/muc#user}reason')
-            rxml.text = reason
-            invite.append(rxml)
-        x.append(invite)
-        msg.append(x)
-        nick = ET.Element('{http://jabber.org/protocol/nick}nick')
-        nick.text = self.get_callsign(room)
-        msg.append(nick)
-        self.xmpp.send(msg)
+        self.xmpp.plugin["xep_0045"].invite(room, target, reason=reason, mfrom=sender.bare, mediated=True)
 
         # Send invite notification
         value = "{0} has invited {1} to the party.".format(self.get_callsign(room), callsign)
