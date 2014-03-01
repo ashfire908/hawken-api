@@ -2,6 +2,7 @@
 # API Exceptions
 
 import re
+from hawkenapi.util import enum
 
 
 class ApiException(Exception):
@@ -40,14 +41,23 @@ class NotAuthenticated(ApiException):
 
 class NotAuthorized(ApiException):
     _re_expired = re.compile(r"^Invalid Access Grant:\s*\(exp\([0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}.[0-9]{7}Z\) <= now\([0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}.[0-9]{7}Z\)\)$")
+    _re_revoked = re.compile(r"^Invalid Access Grant:\s+\(Access grant has been revoked\)$")
 
     @property
     def expired(self):
         return NotAuthorized.is_expired(self.message)
 
+    @property
+    def revoked(self):
+        return NotAuthorized.is_revoked(self.message)
+
     @staticmethod
     def is_expired(message):
         return NotAuthorized._re_expired.match(message) is not None
+
+    @staticmethod
+    def is_revoked(message):
+        return NotAuthorized._re_revoked.match(message) is not None
 
 
 class NotAllowed(ApiException):
@@ -70,7 +80,7 @@ class ServiceUnavailable(ApiException):
     pass
 
 
-class WrongOwner(ApiException):
+class WrongUser(ApiException):
     pass
 
 
@@ -103,6 +113,69 @@ class InvalidBatch(ApiException):
                     errors[error["Error"]] = [error["Guid"]]
 
         return errors
+
+
+class InsufficientFunds(ApiException):
+    _re_parse = re.compile(r"^Insufficient ([HM]P) funds\.\s+Cost ([0-9]+)\s*:\s*Balance ([0-9]+)$")
+
+    def __init__(self, message, code):
+        super(InsufficientFunds, self).__init__(message, code)
+
+        # Parse out the metadata
+        self._match = InsufficientFunds._re_parse.match(message)
+        if self._match is None:
+            self.currency = None
+            self.cost = None
+            self.balance = None
+        else:
+            self.currency = self._match.group(1)
+            self.cost = int(self._match.group(2))
+            self.balance = int(self._match.group(3))
+
+    @property
+    def is_match(self):
+        return self._match is not None
+
+
+class InvalidStatTransfer(ApiException):
+    _re_notenough = re.compile(r"^Item ([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-4[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}) does not have enough ([A-Za-z0-9]+) to transfer\.\s+Actual: ([0-9]+) Required ([0-9]+)$")
+    _re_toomuch = re.compile(r"^Item ([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-4[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}) has too many ([A-Za-z0-9]+) to transfer\.\s+Proposed: ([0-9]+) Cap: ([0-9]+)$")
+    _re_notamultiple = re.compile(r"^Transfer must be a multiple of StatPerCurrency$")
+    
+    Error = enum(NONE=0, NOTENOUGH=1, TOOMUCH=2, NOTAMULTIPLE=3)
+
+    def __init__(self, message, code):
+        super(InvalidStatTransfer, self).__init__(message, code)
+
+        self.type = InvalidStatTransfer.Error.NONE
+        self.item = None
+        self.stat = None
+        self.requested = None
+        self.threshold = None
+
+        # Parse out the metadata
+        match = InvalidStatTransfer._re_notenough.match(message)
+        if match:
+            self._set_match(InvalidStatTransfer.Error.NOTENOUGH, match)
+        else:
+            match = InvalidStatTransfer._re_toomuch.match(message)
+            if match:
+                self._set_match(InvalidStatTransfer.Error.TOOMUCH, match)
+            else:
+                match = InvalidStatTransfer._re_notamultiple.match(message)
+                if match:
+                    self._set_match(InvalidStatTransfer.Error.NOTAMULTIPLE, match)
+
+    def _set_match(self, _type, match):
+        self.type = _type
+        self.item = match.group(1)
+        self.stat = match.group(2)
+        self.requested = int(match.group(3))
+        self.threshold = int(match.group(4))
+
+    @property
+    def is_match(self):
+        return self.type != InvalidStatTransfer.Error.NONE
 
 
 class RequestError(Exception):

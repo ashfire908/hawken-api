@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 # Utilities
 
+import re
 import base64
 import json
 import ctypes
@@ -9,6 +10,13 @@ from datetime import datetime
 
 def enum(**enums):
     return type('Enum', (), enums)
+
+
+def verify_guid(guid):
+    if re.match(r"^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-4[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$", guid) is None:
+        return False
+
+    return True
 
 
 def create_bitfield(*fields):
