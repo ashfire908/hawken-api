@@ -1,19 +1,21 @@
 # -*- coding: utf-8 -*-
 
 import urllib.parse
-from hawkenapi.util import enum
+from hawkenapi.util import enum, create_bitfield
 
 
 # Enums
 Methods = enum(GET="GET", POST="POST", PUT="PUT", DELETE="DELETE")
+Flags = create_bitfield("authrequired", "batchheader", "batchpost")
 
 
-# Base endpoint class
+# Endpoint class
 class Endpoint:
-    def __init__(self, endpoint, fields=(), methods=()):
+    def __init__(self, endpoint, fields=(), methods=(), flags=()):
         self._endpoint = endpoint
         self.fields = fields
         self.methods = methods
+        self.flags = Flags(flags)
 
     def __str__(self):
         return self._endpoint
@@ -28,9 +30,11 @@ class Endpoint:
 
         # Verify the query fields
         query = {}
-        for field, value in fields.items():
-            if field in self.fields:
-                query[field] = value
+        if len(fields) > 0:
+            field_search = [field.lower() for field in self.fields]
+            for field, value in fields.items():
+                if field.lower in field_search and value is not None:
+                    query[field] = value
 
         # Append the query string
         if len(query) > 0:
@@ -38,6 +42,7 @@ class Endpoint:
 
         # Return the endpoint
         return endpoint
+
 
 # Define the API endpoints
 achievement = Endpoint("achievements", fields=("countryCode", ), methods=(Methods.GET, ))

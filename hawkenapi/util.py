@@ -3,11 +3,30 @@
 
 import base64
 import json
+import ctypes
 from datetime import datetime
 
 
 def enum(**enums):
     return type('Enum', (), enums)
+
+
+def create_bitfield(*fields):
+    field_list = []
+    for field in fields:
+        field_list.append((field, ctypes.c_uint8, 1))
+
+    class Bits(ctypes.LittleEndianStructure):
+        _fields_ = field_list
+
+        def __init__(self, bits=None):
+            super().__init__()
+
+            if bits is not None:
+                for bit in list(bits):
+                    setattr(self, bit, 1)
+
+    return Bits
 
 
 class JWTParser:
