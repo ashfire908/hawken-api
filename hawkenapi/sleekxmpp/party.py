@@ -133,7 +133,7 @@ class Hawken_Party(base_plugin):
 
     def set_leader(self, room, target):
         # Set the target as the owner
-        self.xmpp.plugin["xep_0045"].set_affiliation(room, target, "owner")
+        self.xmpp.plugin["xep_0045"].set_affiliation(room, target, "owner", block=True)
 
     def matchmaking_start(self, room, sender):
         # Send matchmaking start notice
