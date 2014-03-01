@@ -4,10 +4,13 @@
 import time
 from datetime import datetime
 import logging
-from hawkenapi.interface import Interface
+from hawkenapi.interface import *
 from hawkenapi.exceptions import NotAuthenticated, NotAuthorized, InternalServerError, ServiceUnavailable, \
-    RequestError, RetryLimitExceeded
-from hawkenapi.util import JWTParser
+    RequestError, RetryLimitExceeded, InvalidBatch
+from hawkenapi.util import JWTParser, chunks
+
+__all__ = ["AccessGrant", "Client"]
+
 
 # Setup logging
 logger = logging.getLogger(__name__)
@@ -76,14 +79,16 @@ class Client:
         self.retry_attempts = retry_attempts
         self.retry_delay = retry_delay
 
-    def _wrapper(self, method, *args, **kwargs):
+        self._batch_limit = 200
+
+    def _request(self, endpoint, *args, **kwargs):
         last_exception = None
         i = 0
         success = False
         response = None
         while self.retry_attempts > i:
             try:
-                response = method(*args, **kwargs)
+                response = endpoint(self._interface, *args, **kwargs)
             except (InternalServerError, ServiceUnavailable, RequestError) as e:
                 logger.warning("Temporary error returned, automatically retrying... (Attempt {0} of {1})".format(i + 1, self.retry_attempts))
                 last_exception = e
@@ -109,7 +114,7 @@ class Client:
 
     def login(self, username, password):
         # Auth to the API
-        grant = self._wrapper(self._interface.auth, username, password)
+        grant = self._request(auth, username, password)
 
         if grant:
             # Save the user/password
@@ -126,7 +131,7 @@ class Client:
     @require_auth
     def logout(self):
         try:
-            result = self._wrapper(self._interface.deauth, str(self.grant), self.guid)
+            result = self._request(deauth, str(self.grant), self.guid)
         finally:
             # Reset the auth info
             self.grant = None
@@ -137,87 +142,316 @@ class Client:
         return result
 
     @require_auth
-    def get_user(self, identifier):
-        return self._wrapper(self._interface.user_account, self.grant, identifier)
-
-    def get_user_guid(self, callsign):
-        return self._wrapper(self._interface.user_guid, callsign)
+    def get_achievements_list(self, countrycode=None):
+        return self._request(achievement_list, self.grant, countrycode=countrycode)
 
     @require_auth
-    def get_user_callsign(self, guid):
-        response = self._wrapper(self._interface.user_publicdata, self.grant, guid)
-
-        # Some users don't have a callsign
-        if response is not None:
+    def get_achievements(self, achievement, countrycode=None):
+        if isinstance(achievement, str):
+            # Emulate a single-type request
             try:
-                return response["UniqueCaseInsensitive_Callsign"]
-            except KeyError:
-                # Catch it in the following line
-                pass
+                data = self._request(achievement_batch, self.grant, [achievement], countrycode=countrycode)
+            except InvalidBatch:
+                return None
 
-        return None
+            return data[0]
 
-    @require_auth
-    def get_user_server(self, guid):
-        return self._wrapper(self._interface.user_server, self.grant, guid)
+        # Perform a chunked batch request
+        data = []
+        for chunk in chunks(achievement, self._batch_limit):
+            data.extend(self._request(achievement_batch, self.grant, chunk, countrycode=countrycode))
 
-    @require_auth
-    def get_user_stats(self, guid):
-        if isinstance(guid, str):
-            return self._wrapper(self._interface.user_stats_single, self.grant, guid)
-        else:
-            return self._wrapper(self._interface.user_stats_batch, self.grant, guid)
+        return data
 
     @require_auth
-    def get_server(self, guid=None):
-        if guid is None:
-            return self._wrapper(self._interface.server_list, self.grant)
-        else:
-            return self._wrapper(self._interface.server_single, self.grant, guid)
+    def get_achievement_rewards_list(self, countrycode=None):
+        return self._request(achievement_reward_list, self.grant, countrycode=countrycode)
+
+    @require_auth
+    def get_achievement_rewards(self, achievement, countrycode=None):
+        if isinstance(achievement, str):
+            return self._request(achievement_reward_single, self.grant, achievement, countrycode=countrycode)
+
+        # Perform a chunked batch request
+        data = []
+        for chunk in chunks(achievement, self._batch_limit):
+            data.extend(self._request(achievement_reward_batch, self.grant, chunk, countrycode=countrycode))
+
+        return data
+
+    @require_auth
+    def get_user_achievements_list(self, user):
+        return self._request(achievement_user_list, self.grant, user)
+
+    @require_auth
+    def get_user_achievements(self, user, achievement):
+        if isinstance(achievement, str):
+            # Emulate a single-type request
+            try:
+                data = self._request(achievement_user_batch, self.grant, user, [achievement])
+            except InvalidBatch:
+                return None
+
+            if data:
+                return data[0]
+
+            return data
+
+        # Perform a chunked batch request
+        data = []
+        for chunk in chunks(achievement, self._batch_limit):
+            response = self._request(achievement_user_batch, self.grant, user, chunk)
+            if response is None:
+                # No such user
+                return None
+
+            data.extend(response)
+
+        return data
+
+    @require_auth
+    def unlock_achievement(self, achievement):
+        return self._request(achievement_user_unlock, self.grant, self.guid, achievement)
+
+    @require_auth
+    def get_antiaddition(self, user):
+        return self._request(antiaddiction, self.grant, user)
+
+    @require_auth
+    def get_clan_list(self, tag=None, name=None):
+        return self._request(clan_list, self.grant, tag=tag, name=name)
+
+    @require_auth
+    def get_clan(self, clan):
+        return self._request(clan_single, self.grant, clan)
+
+    @require_auth
+    def get_clan_users(self, clan):
+        return self._request(clan_users, self.grant, clan)
+
+    @require_auth
+    def get_hawken_credits(self, user):
+        return self._request(currency_hawken, self.grant, user)
+
+    @require_auth
+    def get_meteor_credits(self, user):
+        return self._request(currency_meteor, self.grant, user)
+
+    def get_events_url(self):
+        return self._request(events_url)
+
+    @require_auth
+    def get_game_items(self, item=None):
+        if item is None:
+            return self._request(game_items, self.grant)
+        elif isinstance(item, str):
+            return self._request(game_items_single, self.grant, item)
+
+        return self._request(game_items_batch, self.grant, item)
+
+    @require_auth
+    def get_game_offers_list(self):
+        return self._request(game_offers_list)
+
+    @require_auth
+    def get_game_offers(self, offer):
+        if isinstance(offer, str):
+            return self._request(game_offers_single, self.grant, offer)
+
+        return self._request(game_offers_batch, self.grant, offer)
+
+    @require_auth
+    def redeem_game_offer(self, offer, currency, transaction, parent=None):
+        return self._request(game_offers_redeem, self.grant, self.guid, offer, currency, transaction, parent=parent)
+
+    @require_auth
+    def rent_game_offer(self, offer, currency, transaction, parent=None):
+        return self._request(game_offers_rent, self.grant, self.guid, offer, currency, transaction, parent=parent)
+
+    @require_auth
+    def get_advertisement(self, advertisement):
+        return self._request(matchmaking_advertisement, self.grant, advertisement)
+
+    @require_auth
+    def create_matchmaking_advertisement(self, gameversion, region, users, gametype=None, party=None):
+        advertisement = generate_advertisement_matchmaking(gameversion, region, self.guid, users, gametype, party)
+
+        return self._request(matchmaking_advertisement_create, self.grant, advertisement)
+
+    @require_auth
+    def create_server_advertisement(self, gameversion, region, server, users, party=None):
+        advertisement = generate_advertisement_server(gameversion, region, server, self.guid, users, party)
+
+        return self._request(matchmaking_advertisement_create, self.grant, advertisement)
+
+    @require_auth
+    def delete_advertisement(self, advertisement):
+        return self._request(matchmaking_advertisement_delete, self.grant, advertisement)
+
+    @require_auth
+    def get_presence_access(self):
+        return self._request(presence_access, self.grant, self.guid)
+
+    @require_auth
+    def get_presence_domain(self):
+        return self._request(presence_domain, self.grant, self.guid)
+
+    @require_auth
+    def get_server(self, server=None):
+        if server is None:
+            return self._request(server_list, self.grant)
+
+        return self._request(server_single, self.grant, server)
 
     @require_auth
     def get_server_by_name(self, name):
-        server_list = self._wrapper(self._interface.server_list, self.grant)
-
         servers = []
         name = name.lower()
-        for server in server_list:
+        for server in self._request(server_list, self.grant):
             if server["ServerName"].lower() == name:
                 servers.append(server)
 
         return servers
 
     @require_auth
-    def get_advertisement(self, guid):
-        return self._wrapper(self._interface.matchmaking_advertisement, self.grant, guid)
+    def get_stat_overflow_list(self):
+        return self._request(stat_overflow_list, self.grant)
 
     @require_auth
-    def post_matchmaking_advertisement(self, gameversion, region, users, gametype=None, party=None):
-        advertisement = self._interface.generate_advertisement_matchmaking(gameversion, region, self.guid, users, gametype, party)
-
-        return self._wrapper(self._interface.matchmaking_advertisement_post, self.grant, advertisement)
+    def get_stat_overflow(self, overflow):
+        return self._request(stat_overflow_single, self.grant, overflow)
 
     @require_auth
-    def post_server_advertisement(self, gameversion, region, server, users, party=None):
-        advertisement = self._interface.generate_advertisement_server(gameversion, region, server, self.guid, users, party)
-
-        return self._wrapper(self._interface.matchmaking_advertisement_post, self.grant, advertisement)
+    def transfer_stat_overflow_from_item(self, item, overflow, amount):
+        return self._request(stat_overflow_transfer_from, self.grant, self.guid, item, overflow, amount)
 
     @require_auth
-    def delete_advertisement(self, guid):
-        return self._wrapper(self._interface.matchmaking_advertisement_delete, self.grant, guid)
+    def transfer_stat_overflow_to_item(self, item, overflow, amount):
+        return self._request(stat_overflow_transfer_to, self.grant, self.guid, item, overflow, amount)
+
+    def get_game_status(self):
+        return self._request(status_game)
+
+    def get_services_status(self):
+        return self._request(status_services)
 
     @require_auth
-    def get_presence_access(self):
-        return self._wrapper(self._interface.presence_access, self.grant, self.guid)
+    def get_user(self, identifier):
+        return self._request(user_account, self.grant, identifier)
 
     @require_auth
-    def get_presence_domain(self):
-        return self._wrapper(self._interface.presence_domain, self.grant, self.guid)
+    def get_user_clan(self, user):
+        return self._request(user_clan, self.grant, user)
 
     @require_auth
-    def get_game_items(self, guid=None):
-        if guid is None:
-            return self._wrapper(self._interface.game_items, self.grant)
-        else:
-            return self._wrapper(self._interface.game_items_single, self.grant, guid)
+    def get_eula_status(self):
+        return self._request(user_eula_read, self.grant, self.guid)
+
+    @require_auth
+    def get_user_game_settings(self, user):
+        return self._request(user_game_settings, self.grant, user)
+
+    @require_auth
+    def create_user_game_settings(self, settings):
+        return self._request(user_game_settings_create, self.grant, self.guid, settings)
+
+    @require_auth
+    def update_user_game_settings(self, settings):
+        return self._request(user_game_settings_update, self.grant, self.guid, settings)
+
+    @require_auth
+    def delete_user_game_settings(self):
+        return self._request(user_game_settings_delete, self.grant, self.guid)
+
+    def get_user_guid(self, callsign):
+        return self._request(user_guid, callsign)
+
+    @require_auth
+    def get_user_items(self, user, item=None):
+        if item is None:
+            return self._request(user_items, self.grant, user)
+        elif isinstance(item, str):
+            # Emulate a single-type request
+            try:
+                data = self._request(user_items_batch, self.grant, user, [item])
+            except InvalidBatch:
+                return None
+
+            if data:
+                return data[0]
+
+            return data
+
+        return self._request(user_items_batch, self.grant, user, item)
+
+    @require_auth
+    def update_user_item(self, item, data):
+        return self._request(user_items_broker, self.grant, self.guid, item, data)
+
+    @require_auth
+    def get_user_item_stats(self, user, item=None):
+        if item is None:
+            return self._request(user_items_stats, self.grant, user)
+
+        return self._request(user_items_stats_single, self.grant, user, item)
+
+    @require_auth
+    def get_meteor_settings(self):
+        return self._request(user_meteor_settings, self.grant, self.guid)
+
+    @require_auth
+    def get_user_legacy_data(self, user):
+        return self._request(user_publicdata_single, self.grant, user)
+
+    @require_auth
+    def get_user_callsign(self, user):
+        response = self._request(user_publicdata_single, self.grant, user)
+
+        if response is not None:
+            # Some users don't have a callsign
+            return response.get("UniqueCaseInsensitive_Callsign", None)
+
+        return None
+
+    @require_auth
+    def get_user_server(self, user):
+        return self._request(user_server, self.grant, user)
+
+    @require_auth
+    def get_user_stats(self, user):
+        if isinstance(user, str):
+            return self._request(user_stats_single, self.grant, user)
+
+        # Perform a chunked batch request
+        data = []
+        for chunk in chunks(user, self._batch_limit):
+            data.extend(self._request(user_stats_batch, self.grant, user))
+
+        return data
+
+    @require_auth
+    def create_transaction(self):
+        return self._request(user_transaction, self.grant, self.guid)
+
+    def get_version(self):
+        return self._request(version)
+
+    @require_auth
+    def get_voice_access(self):
+        return self._request(voice_access, self.grant, self.guid)
+
+    @require_auth
+    def get_voice_info(self):
+        return self._request(voice_info, self.grant)
+
+    @require_auth
+    def get_voice_user_info(self, voice):
+        return self._request(voice_lookup, self.grant, voice)
+
+    @require_auth
+    def get_voice_user_id(self, user):
+        return self._request(voice_user, self.grant, user)
+
+    @require_auth
+    def get_voice_channel(self, channel):
+        return self._request(voice_channel, self.grant, channel)
