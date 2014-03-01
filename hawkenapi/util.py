@@ -51,12 +51,12 @@ class JWTParser:
     def __init__(self, token):
         # Split token and pad elements
         header, payload, signature = self.pad(token.split("."))
- 
+
         # Decode elements
         self.header = json.loads(base64.urlsafe_b64decode(header).decode())
         self.payload = json.loads(base64.urlsafe_b64decode(payload).decode())
         self.signature = base64.urlsafe_b64decode(signature)
-        
+
         # Convert timestamps to python data types
         for key in ("exp", "nbf", "iat"):
             if key in self.payload:
@@ -66,7 +66,7 @@ class JWTParser:
     def pad(elements):
         for element in elements:
             yield element + '=' * ((4 - len(element) % 4) % 4)
- 
+
     @staticmethod
     def parse_timestamp(s):
         return datetime.strptime(s, "%a, %d %b %Y %H:%M:%S %Z")
