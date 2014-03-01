@@ -17,11 +17,9 @@ class ApiException(Exception):
 class AuthenticationFailure(ApiException):
     _re_bad_pass = re.compile(r"^Access Grant Not Issued: Password Incorrect$")
 
-    def __getattr__(self, key):
-        if key == "badpass":
-            return self.is_badpass(self.message)
-        else:
-            raise AttributeError
+    @property
+    def badpass(self):
+        return AuthenticationFailure.is_badpass(self.message)
 
     @staticmethod
     def is_badpass(message):
@@ -31,11 +29,9 @@ class AuthenticationFailure(ApiException):
 class NotAuthenticated(ApiException):
     _re_missing = re.compile(r"^Invalid Access Grant$")
 
-    def __getattr__(self, key):
-        if key == "missing":
-            return self.is_missing(self.message)
-        else:
-            raise AttributeError
+    @property
+    def missing(self):
+        return NotAuthenticated.is_missing(self.message)
 
     @staticmethod
     def is_missing(message):
@@ -45,11 +41,9 @@ class NotAuthenticated(ApiException):
 class NotAuthorized(ApiException):
     _re_expired = re.compile(r"^Invalid Access Grant:\s*\(exp\([0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}.[0-9]{7}Z\) <= now\([0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}.[0-9]{7}Z\)\)$")
 
-    def __getattr__(self, key):
-        if key == "expired":
-            return self.is_expired(self.message)
-        else:
-            raise AttributeError
+    @property
+    def expired(self):
+        return NotAuthorized.is_expired(self.message)
 
     @staticmethod
     def is_expired(message):
@@ -59,11 +53,9 @@ class NotAuthorized(ApiException):
 class NotAllowed(ApiException):
     _re_denied = re.compile(r"^Invalid Access Grant:\s+\(\)$")
 
-    def __getattr__(self, key):
-        if key == "denied":
-            return self.is_denied(self.message)
-        else:
-            raise AttributeError
+    @property
+    def denied(self):
+        return NotAllowed.is_denied(self.message)
 
     @staticmethod
     def is_denied(message):
@@ -100,20 +92,15 @@ class InvalidBatch(ApiException):
         self.result = result
         super(InvalidBatch, self).__init__(message, code)
 
-    def __getattr__(self, key):
-        if key == "errors":
-            return self.get_errors(self.result)
-        else:
-            raise AttributeError
-
-    @staticmethod
-    def get_errors(result):
+    @property
+    def errors(self):
         errors = {}
-        for error in result:
-            try:
-                errors[error["Error"]].append(error["Guid"])
-            except KeyError:
-                errors[error["Error"]] = [error["Guid"]]
+        if self.result is not None:
+            for error in self.result:
+                try:
+                    errors[error["Error"]].append(error["Guid"])
+                except KeyError:
+                    errors[error["Error"]] = [error["Guid"]]
 
         return errors
 
@@ -132,9 +119,9 @@ class RetryLimitExceeded(Exception):
 def auth_exception(response):
     if NotAuthenticated.is_missing(response["Message"]):
         raise NotAuthenticated(response["Message"], response["Status"])
-    elif NotAllowed.is_denied(response["Message"]):
+    if NotAllowed.is_denied(response["Message"]):
         raise NotAllowed(response["Message"], response["Status"])
-    elif AuthenticationFailure.is_badpass(response["Message"]):
+    if AuthenticationFailure.is_badpass(response["Message"]):
         raise AuthenticationFailure(response["Message"], response["Status"])
-    else:
-        raise NotAuthorized(response["Message"], response["Status"])
+
+    raise NotAuthorized(response["Message"], response["Status"])
