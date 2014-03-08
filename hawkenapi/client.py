@@ -26,7 +26,7 @@ def require_auth(f):
         # Check if the grant has expired
         elif self.grant.is_expired:
             logger.info("Automatically authenticating [expired]")
-            self._reauth()
+            self.reauth()
 
         try:
             response = f(self, *args, **kwargs)
@@ -34,7 +34,7 @@ def require_auth(f):
             # Only reauth if the grant expired
             if e.expired:
                 logger.info("Automatically authenticating [reauth] ([{0}] {1})".format(e.code, e.message))
-                self._reauth()
+                self.reauth()
                 response = f(self, *args, **kwargs)
             else:
                 raise
@@ -71,10 +71,9 @@ class Client:
         self._interface = Interface(**kwargs)
 
         # Init auth data
-        self.grant = None
-        self.guid = None
-        self._username = None
-        self._password = None
+        self._grant = None
+        self.identifier = None
+        self.password = None
 
         self.retry_attempts = retry_attempts
         self.retry_delay = retry_delay
@@ -105,25 +104,40 @@ class Client:
         else:
             raise RetryLimitExceeded(i, last_exception) from last_exception
 
-    def _reauth(self):
-        return self.login(self._username, self._password)
+    @property
+    def grant(self):
+        return self._grant
+
+    @grant.setter
+    def grant(self, value):
+        self._grant = AccessGrant(value)
+
+    @grant.deleter
+    def grant(self):
+        self._grant = None
+
+    @property
+    def guid(self):
+        try:
+            return self._grant.user
+        except AttributeError:
+            return None
 
     @property
     def authed(self):
-        return self.grant is not None
+        return self._grant is not None
 
-    def login(self, username, password):
+    def login(self, identifier, password):
         # Auth to the API
-        grant = self._request(auth, username, password)
+        grant = self._request(auth, identifier, password)
 
         if grant:
             # Save the user/password
-            self._username = username
-            self._password = password
+            self.identifier = identifier
+            self.password = password
 
-            # Load in the grant info
-            self.grant = AccessGrant(grant)
-            self.guid = self.grant.user
+            # Set the grant token
+            self.grant = grant
 
             return True
         return False
@@ -134,12 +148,14 @@ class Client:
             result = self._request(deauth, str(self.grant), self.guid)
         finally:
             # Reset the auth info
-            self.grant = None
-            self.guid = None
-            self._username = None
-            self._password = None
+            del self.grant
+            self.identifier = None
+            self.password = None
 
         return result
+
+    def reauth(self):
+        return self.login(self.identifier, self.password)
 
     @require_auth
     def get_achievements_list(self, countrycode=None):
