@@ -27,6 +27,13 @@ class AuthenticationFailure(ApiException):
         return AuthenticationFailure._re_bad_pass.match(message) is not None
 
 
+class AccountBanned(ApiException):
+    def __init__(self, message, code, result):
+        super(AccountBanned, self).__init__(message, code)
+
+        self.reason = result
+
+
 class NotAuthenticated(ApiException):
     _re_missing = re.compile(r"^Invalid Access Grant$")
 
