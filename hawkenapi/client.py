@@ -267,7 +267,7 @@ class Client:
 
     @require_auth
     def get_game_offers_list(self):
-        return self._request(game_offers_list)
+        return self._request(game_offers_list, self.grant)
 
     @require_auth
     def get_game_offers(self, offer):
