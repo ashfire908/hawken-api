@@ -2,7 +2,7 @@
 
 from sleekxmpp import Message
 from sleekxmpp.plugins.base import base_plugin
-from sleekxmpp.xmlstream import register_stanza_plugin, ET
+from sleekxmpp.xmlstream import register_stanza_plugin
 from sleekxmpp.xmlstream.handler import Callback
 from sleekxmpp.xmlstream.matcher import StanzaPath
 from hawkenapi.sleekxmpp.stanza import StormId, PartyMemberData, PartyVoiceChannel, MemberDataCodes
@@ -46,8 +46,8 @@ class Hawken_Party(base_plugin):
         message.send()
 
     def _handle_partymemberdata(self, msg):
-        self.xmpp.event('groupchat_partymemberdata', msg)
-        self.xmpp.event('muc::%s::partymemberdata' % msg['from'].bare, msg)
+        self.xmpp.event("groupchat_partymemberdata", msg)
+        self.xmpp.event("muc::%s::partymemberdata" % msg["from"].bare, msg)
 
     def get_joined_rooms(self):
         # Get joined rooms
@@ -80,7 +80,7 @@ class Hawken_Party(base_plugin):
 
     def get_callsign(self, room):
         # Get our callsign
-        return self.xmpp.plugin["xep_0045"].api['get_self_nick'](self.xmpp.boundjid, room)
+        return self.xmpp.plugin["xep_0045"].api["get_self_nick"](self.xmpp.boundjid, room)
 
     def set_callsign(self, room, callsign):
         # Set our callsign

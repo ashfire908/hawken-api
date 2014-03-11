@@ -9,7 +9,7 @@ from datetime import datetime
 
 
 def enum(**enums):
-    return type('Enum', (), enums)
+    return type("Enum", (), enums)
 
 
 def chunks(l, n):
@@ -65,7 +65,7 @@ class JWTParser:
     @staticmethod
     def pad(elements):
         for element in elements:
-            yield element + '=' * ((4 - len(element) % 4) % 4)
+            yield element + "=" * ((4 - len(element) % 4) % 4)
 
     @staticmethod
     def parse_timestamp(s):

@@ -148,7 +148,7 @@ class InvalidStatTransfer(ApiException):
     _re_notenough = re.compile(r"^Item ([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-4[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}) does not have enough ([A-Za-z0-9]+) to transfer\.\s+Actual: ([0-9]+) Required ([0-9]+)$")
     _re_toomuch = re.compile(r"^Item ([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-4[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}) has too many ([A-Za-z0-9]+) to transfer\.\s+Proposed: ([0-9]+) Cap: ([0-9]+)$")
     _re_notamultiple = re.compile(r"^Transfer must be a multiple of StatPerCurrency$")
-    
+
     Error = enum(NONE=0, NOTENOUGH=1, TOOMUCH=2, NOTAMULTIPLE=3)
 
     def __init__(self, message, code):
