@@ -441,7 +441,7 @@ class Client:
         # Perform a chunked batch request
         data = []
         for chunk in chunks(user, self._batch_limit):
-            data.extend(self._request(user_stats_batch, self.grant, user))
+            data.extend(self._request(user_stats_batch, self.grant, chunk))
 
         return data
 
