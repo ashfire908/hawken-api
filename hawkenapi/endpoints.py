@@ -20,13 +20,17 @@ class Endpoint:
     def __str__(self):
         return self._endpoint
 
-    def format(self, *arguments, **fields):
+    def format_url(self, *arguments):
         # Quote the arguments
         arguments = [urllib.parse.quote(argument) for argument in arguments]
 
         # Generate the endpoint
         endpoint = self._endpoint.format(*arguments)
 
+        # Return the endpoint
+        return endpoint
+
+    def format_fields(self, **fields):
         # Verify the query fields
         query = {}
         if len(fields) > 0:
@@ -35,12 +39,7 @@ class Endpoint:
                 if field.lower in field_search and value is not None:
                     query[field] = value
 
-        # Append the query string
-        if len(query) > 0:
-            endpoint = "{}?{}".format(endpoint, urllib.parse.urlencode(query))
-
-        # Return the endpoint
-        return endpoint
+        return query
 
 
 # Define the API endpoints

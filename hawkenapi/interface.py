@@ -1,21 +1,19 @@
 # -*- coding: utf-8 -*-
 # Low-level API Interface
 
-import logging
-import urllib.request
-import urllib.error
-import http.client
-import gzip
+import requests
+from requests.auth import AuthBase
+from requests.adapters import HTTPAdapter, DEFAULT_POOLSIZE, DEFAULT_RETRIES
 import json
 import hawkenapi
 from hawkenapi import endpoints
 from hawkenapi.endpoints import Methods
 from hawkenapi.exceptions import AuthenticationFailure, NotAuthorized, InternalServerError, \
-    ServiceUnavailable, WrongUser, InvalidRequest, InvalidBatch, InvalidResponse, auth_exception, \
-    RequestError, NotAllowed, InsufficientFunds, InvalidStatTransfer, AccountBanned
+    ServiceUnavailable, WrongUser, InvalidRequest, InvalidBatch, InvalidResponse, NotAuthenticated, \
+    NotAllowed, InsufficientFunds, InvalidStatTransfer, AccountBanned
 from hawkenapi.util import verify_guid
 
-__all__ = ["Interface", "auth", "deauth", "achievement_list", "achievement_batch", "achievement_reward_list",
+__all__ = ["Session", "auth", "deauth", "achievement_list", "achievement_batch", "achievement_reward_list",
            "achievement_reward_single", "achievement_reward_batch", "achievement_user_list", "achievement_user_batch",
            "achievement_user_unlock", "antiaddiction", "clan_list", "clan_single", "clan_users", "currency_hawken",
            "currency_meteor", "events_url", "game_items", "game_items_single", "game_items_batch", "game_offers_list",
@@ -30,85 +28,79 @@ __all__ = ["Interface", "auth", "deauth", "achievement_list", "achievement_batch
            "user_publicdata_single", "user_server", "user_stats_single", "user_stats_batch", "version", "voice_access",
            "voice_info", "voice_lookup", "voice_user", "voice_channel"]
 
-# Setup logging
-logger = logging.getLogger(__name__)
+
+# Auth handler
+class MeteorAuth(AuthBase):
+    def __init__(self, grant):
+        self.grant = str(grant)
+
+    def __call__(self, r):
+        r.headers["Authorization"] = "Basic {0}".format(self.grant)
+        return r
 
 
-# Interface
-class Interface:
-    def __init__(self, host=None, stack=None, scheme="http"):
-        # Set the host and scheme
+# Session
+class Session(requests.Session):
+    def __init__(self, host=None, stack=None, scheme=None, pool_connections=DEFAULT_POOLSIZE, pool_maxsize=DEFAULT_POOLSIZE, max_retries=DEFAULT_RETRIES):
+        super(Session, self).__init__()
+
+        # Set the user agent
+        self.headers["User-Agent"] = "HawkenApi/{0}".format(hawkenapi.__version__)
+
+        # Set the host
         if host:
-            # Use given host
             self.host = host
         elif stack:
-            # Set host by 'stack'
-            self.host = "{0}.hawken.meteor-ent.com".format(stack)
+            self.stack = stack
         else:
-            # Use default host
             self.host = "services.live.hawken.meteor-ent.com"
 
-        self.scheme = scheme
-
-    def _build_endpoint(self, endpoint, *args, **kwargs):
-        return "{0}://{1}/{2}".format(self.scheme, self.host, endpoint.format(*args, **kwargs))
-
-    def _build_request(self, url, method, auth, data, batch):
-        # Encode data
-        if data:
-            body = json.dumps(data).encode()
+        # Set the scheme
+        if scheme:
+            self.scheme = scheme
         else:
-            body = None
+            self.scheme = "http"
 
-        # Create the request
-        request = urllib.request.Request(url, data=body, method=method)
+        # Set up the adapter
+        adapter = HTTPAdapter(pool_connections=pool_connections, pool_maxsize=pool_maxsize, max_retries=max_retries)
+        self.mount("http://", adapter)
+        self.mount("https://", adapter)
 
-        # Add the headers
-        if auth:
-            request.add_header("Authorization", "Basic %s" % auth)
-        if body is not None:
-            request.add_header("Content-Type", "application/json")
-        if batch:
-            request.add_header("X-Meteor-Batch", ",".join(batch))
+    @property
+    def host(self):
+        return self._host
 
-        return request
+    @host.setter
+    def host(self, value):
+        self._host = value
+        self._stack = None
 
-    def _perform_request(self, request):
-        # Add global headers
-        request.add_header("User-Agent", "HawkenApi/{0}".format(hawkenapi.__version__))
-        request.add_header("Accept-Encoding", "gzip")
+    @property
+    def stack(self):
+        return self._stack
 
-        try:
-            # Open the connection
-            connection = urllib.request.urlopen(request)
-            try:
-                # Load the data
-                response = connection.read()
+    @stack.setter
+    def stack(self, value):
+        self._host = "{0}.hawken.meteor-ent.com".format(value)
+        self._stack = value
 
-                # Grab the info we need
-                charset = connection.info().get_content_charset("utf-8")  # Fallback: UTF-8
-                content_encoding = connection.getheader("Content-Encoding")
-            except:
-                logger.error("Exception at response - {0} {1}".format(request.method, connection.url))
-                raise
-            finally:
-                # Close the connection
-                connection.close()
-        except:
-            logger.error("Exception at request - {0} {1}".format(request.method, request.selector))
-            raise
+    @property
+    def scheme(self):
+        return self._scheme
 
-        # Decode the response
-        if content_encoding is None:
-            pass
-        elif content_encoding == "gzip":
-            response = gzip.decompress(response)
-        else:
-            raise NotImplementedError("Unknown encoding type given")
+    @scheme.setter
+    def scheme(self, value):
+        if value not in ("http", "https"):
+            raise ValueError("Invalid scheme - must be either 'http' or 'https'")
 
-        return json.loads(response.decode(charset)), {"url": connection.url, "method": request.method}
+        self._scheme = value
 
-    def _request(self, method, endpoint, *args, check=True, auth=None, data=None, batch=None, **kwargs):
+    def format_endpoint(self, endpoint, *args):
+        return "{0}://{1}/{2}".format(self.scheme, self.host, endpoint.format_url(*args))
+
+    def build_request(self, method, endpoint, *args, auth=None, data=None, batch=None, **fields):
+        headers = {}
+
         # Verify endpoint support
         if method not in endpoint.methods:
             raise ValueError("Endpoint does not support {0} method".format(method))
@@ -116,71 +108,105 @@ class Interface:
             raise ValueError("The {0} method does not take a request body".format(method))
         if not auth and endpoint.flags.authrequired:
             raise ValueError("Endpoint requires an access grant")
-        if batch and not endpoint.flags.batchheader:
-            raise ValueError("Endpoint does not support batched requests")
 
-        try:
-            # Create the API request
-            request = self._build_request(self._build_endpoint(endpoint, *args, **kwargs), method, auth, data, batch)
+        # Get the url
+        url = self.format_endpoint(endpoint, *args)
 
-            # Perform the request
-            response = self._perform_request(request)
-        except http.client.BadStatusLine as e:
-            # Handle bad status error (network error)
-            raise RequestError("HTTP Bad Status") from e
-        except urllib.error.HTTPError as e:
-            # Handle HTTP errors
-            if e.code == 503:
-                # Service unavailable (usually backend at capacity)
-                raise ServiceUnavailable(e.reason, e.code) from e
-            if e.code == 500:
-                # Internal server error (HTTP level)
-                raise InternalServerError(e.reason, e.code) from e
-            if e.code == 400:
-                # Bad request (HTTP level)
-                raise InvalidRequest(e.reason, e.code) from e
+        # Handle auth
+        if auth:
+            auth = MeteorAuth(auth)
 
-            raise
-        except urllib.error.URLError as e:
-            # Handle URL library errors
-            raise RequestError(e.reason) from e
+        # Handle batch
+        if batch:
+            if endpoint.flags.batchheader:
+                # Batch header
+                headers["X-Meteor-Batch"] = ",".join(batch)
+            elif endpoint.flags.batchbody:
+                if data:
+                    raise ValueError("Endpoint cannot take data in a batched request")
 
-        # Log the request
-        logger.debug("{0[method]} {0[url]} {1}".format(response[1], response[0]["Status"]))
+                # Batch body
+                data = batch
+            else:
+                raise ValueError("Endpoint does not support batched requests")
+
+        # Handle data
+        if data:
+            data = json.dumps(data)
+            headers["Content-Type"] = "application/json"
+
+        # Prepare the request
+        request = self.prepare_request(requests.Request(method, url, headers=headers, data=data, params=endpoint.format_fields(**fields), auth=auth))
+
+        return request
+
+    def perform_request(self, request, check=True):
+        response = self.send(request)
+
+        # Check for HTTP errors
+        if response.status_code != requests.codes.ok:
+            if response.status_code == requests.codes.service_unavailable:
+                raise ServiceUnavailable(response.reason, response.status_code)
+            if response.status_code == requests.codes.internal_server_error:
+                raise InternalServerError(response.reason, response.status_code)
+            if response.status_code == requests.codes.bad_request:
+                raise InvalidRequest(response.reason, response.status_code)
+
+            response.raise_for_status()
+
+        reply = response.json()
 
         # Check for server errors
-        if response[0]["Status"] == 500:
-            raise InternalServerError(response[0]["Message"], response[0]["Status"])
+        if reply["Status"] == 500:
+            raise InternalServerError(reply["Message"], reply["Status"])
+
         if check:
-            # Check for auth errors
-            if response[0]["Status"] == 401:
-                auth_exception(response[0])
-            # Check for batch header errors
-            if response[0]["Status"] == 400 and endpoint.flags.batchheader and (
-               response[0]["Message"] == "Batch request must contain valid guids in 'x-meteor-batch'." or
-               response[0]["Message"] == "Invalid users ID"):
-                raise InvalidBatch(response[0]["Message"], response[0]["Status"], response[0].get("Result", None))
+            # Check for authentication errors
+            if reply["Status"] == 401:
+                if NotAuthenticated.is_missing(reply["Message"]):
+                    # Missing authentication
+                    raise NotAuthenticated(reply["Message"], reply["Status"])
+                if NotAllowed.is_denied(reply["Message"]):
+                    # Denied access
+                    raise NotAllowed(reply["Message"], reply["Status"])
+                if AuthenticationFailure.is_badpass(reply["Message"]):
+                    # Bad password
+                    raise AuthenticationFailure(reply["Message"], reply["Status"])
+
+                # General authentication error
+                raise NotAuthorized(reply["Message"], reply["Status"])
+
             # Check for invalid request errors
-            if response[0]["Status"] == 400:
-                raise InvalidRequest(response[0]["Message"], response[0]["Status"])
+            if reply["Status"] == requests.codes.bad_request:
+                # Check for batch header errors
+                if "X-Meteor-Batch" in response.request.headers and (
+                   reply["Message"] == "Batch request must contain valid guids in 'x-meteor-batch'." or
+                   reply["Message"] == "Invalid users ID"):
+                    raise InvalidBatch(reply["Message"], reply["Status"], reply.get("Result", None))
 
-        # Return the response data
-        return response[0]
+                raise InvalidRequest(reply["Message"], reply["Status"])
 
-    def get(self, endpoint, *args, **kwargs):
-        return self._request(Methods.GET, endpoint, *args, **kwargs)
+        # Return JSON reply
+        return reply
 
-    def post(self, endpoint, *args, **kwargs):
-        return self._request(Methods.POST, endpoint, *args, **kwargs)
+    def api_call(self, method, endpoint, *args, auth=None, data=None, batch=None, check=True, **fields):
+        request = self.build_request(method, endpoint, *args, auth=auth, data=data, batch=batch, **fields)
+        return self.perform_request(request, check=check)
 
-    def put(self, endpoint, *args, **kwargs):
-        return self._request(Methods.PUT, endpoint, *args, **kwargs)
+    def api_get(self, endpoint, *args, **kwargs):
+        return self.api_call(Methods.GET, endpoint, *args, **kwargs)
 
-    def delete(self, endpoint, *args, **kwargs):
-        return self._request(Methods.DELETE, endpoint, *args, **kwargs)
+    def api_post(self, endpoint, *args, **kwargs):
+        return self.api_call(Methods.POST, endpoint, *args, **kwargs)
+
+    def api_put(self, endpoint, *args, **kwargs):
+        return self.api_call(Methods.PUT, endpoint, *args, **kwargs)
+
+    def api_delete(self, endpoint, *args, **kwargs):
+        return self.api_call(Methods.DELETE, endpoint, *args, **kwargs)
 
 
-def auth(interface, username, password):
+def auth(session, username, password):
     # Validate the username and password
     if not isinstance(username, str) or username == "":
         raise ValueError("Username cannot be blank")
@@ -189,7 +215,7 @@ def auth(interface, username, password):
 
     data = {"Password": password}
 
-    response = interface.post(endpoints.user_accessgrant, username, data=data, check=False)
+    response = session.api_post(endpoints.user_accessgrant, username, data=data, check=False)
 
     if response["Status"] == 200:
         # Return response
@@ -207,39 +233,38 @@ def auth(interface, username, password):
     return False
 
 
-def deauth(interface, grant, guid):
+def deauth(session, grant, guid):
     # Validate the guid given
     if not verify_guid(guid):
         raise ValueError("Invalid user GUID given")
 
     data = {"AccessGrant": grant}
 
-    response = interface.put(endpoints.user_accessgrant, guid, auth=grant, data=data, check=False)
+    try:
+        response = session.api_put(endpoints.user_accessgrant, guid, auth=grant, data=data, check=False)
+    except NotAuthorized as e:
+        if e.revoked:
+            # Already revoked
+            return True
+
+        raise
 
     if response["Status"] == 200:
         # Success
         return True
 
-    if response["Status"] == 401:
-        if NotAuthorized.is_revoked(response["Message"]):
-            # Already revoked
-            return True
-
-        # Auth failure
-        auth_exception(response)
-
     # Catch all failure
     return False
 
 
-def achievement_list(interface, grant, countrycode=None):
-    response = interface.get(endpoints.achievement, auth=grant, countrycode=countrycode)
+def achievement_list(session, grant, countrycode=None):
+    response = session.api_get(endpoints.achievement, auth=grant, countrycode=countrycode)
 
     # Return the achievement list
     return response["Result"]
 
 
-def achievement_batch(interface, grant, guids, countrycode=None):
+def achievement_batch(session, grant, guids, countrycode=None):
     # Validate the guids given
     if len(guids) == 0:
         raise ValueError("List of achievement GUIDs cannot be empty")
@@ -247,25 +272,25 @@ def achievement_batch(interface, grant, guids, countrycode=None):
         if not verify_guid(guid):
             raise ValueError("Invalid achievement GUID given")
 
-    response = interface.get(endpoints.achievement_batch, auth=grant, batch=guids, countrycode=countrycode)
+    response = session.api_get(endpoints.achievement_batch, auth=grant, batch=guids, countrycode=countrycode)
 
     # Return response
     return response["Result"]
 
 
-def achievement_reward_list(interface, grant, countrycode=None):
-    response = interface.get(endpoints.achievement_reward, auth=grant, countrycode=countrycode)
+def achievement_reward_list(session, grant, countrycode=None):
+    response = session.api_get(endpoints.achievement_reward, auth=grant, countrycode=countrycode)
 
     # Return response
     return response["Result"]
 
 
-def achievement_reward_single(interface, grant, guid, countrycode=None):
+def achievement_reward_single(session, grant, guid, countrycode=None):
     # Validate the guid given
     if not verify_guid(guid):
         raise ValueError("Invalid achievement reward GUID given")
 
-    response = interface.get(endpoints.achievement_reward_single, guid, auth=grant, countrycode=countrycode)
+    response = session.api_get(endpoints.achievement_reward_single, guid, auth=grant, countrycode=countrycode)
 
     if response["Status"] == 404:
         # No such reward
@@ -275,7 +300,7 @@ def achievement_reward_single(interface, grant, guid, countrycode=None):
     return response["Result"]
 
 
-def achievement_reward_batch(interface, grant, guids, countrycode=None):
+def achievement_reward_batch(session, grant, guids, countrycode=None):
     # Validate the guids given
     if len(guids) == 0:
         raise ValueError("List of achievement reward GUIDs cannot be empty")
@@ -283,18 +308,18 @@ def achievement_reward_batch(interface, grant, guids, countrycode=None):
         if not verify_guid(guid):
             raise ValueError("Invalid achievement reward GUID given")
 
-    response = interface.get(endpoints.achievement_reward_batch, auth=grant, batch=guids, countrycode=countrycode)
+    response = session.api_get(endpoints.achievement_reward_batch, auth=grant, batch=guids, countrycode=countrycode)
 
     # Return response
     return response["Result"]
 
 
-def achievement_user_list(interface, grant, guid):
+def achievement_user_list(session, grant, guid):
     # Validate the guid given
     if not verify_guid(guid):
         raise ValueError("Invalid user GUID given")
 
-    response = interface.get(endpoints.achievement_user, guid, auth=grant)
+    response = session.api_get(endpoints.achievement_user, guid, auth=grant)
 
     if response["Status"] == 404:
         if response["Message"] == "User not found":
@@ -308,7 +333,7 @@ def achievement_user_list(interface, grant, guid):
     return response["Result"]
 
 
-def achievement_user_batch(interface, grant, user, achievements):
+def achievement_user_batch(session, grant, user, achievements):
     # Validate the guids given
     if not verify_guid(user):
         raise ValueError("Invalid user GUID given")
@@ -318,7 +343,7 @@ def achievement_user_batch(interface, grant, user, achievements):
         if not verify_guid(guid):
             raise ValueError("Invalid achievement GUID given")
 
-    response = interface.get(endpoints.achievement_user, user, auth=grant, batch=achievements)
+    response = session.api_get(endpoints.achievement_user, user, auth=grant, batch=achievements)
 
     if response["Status"] == 404:
         if response["Message"] == "Error retrieving batch items.":
@@ -332,14 +357,14 @@ def achievement_user_batch(interface, grant, user, achievements):
     return response["Result"]
 
 
-def achievement_user_unlock(interface, grant, user, achievement):
+def achievement_user_unlock(session, grant, user, achievement):
     # Validate the guids given
     if not verify_guid(user):
         raise ValueError("Invalid user GUID given")
     if not verify_guid(user):
         raise ValueError("Invalid achievement GUID given")
 
-    response = interface.post(endpoints.achievement_user_client, user, achievement, auth=grant)
+    response = session.api_post(endpoints.achievement_user_client, user, achievement, auth=grant)
 
     if response["Status"] == 403:
         if response["Message"] == "Requesting access grant's user GUID must match user GUID parameter":
@@ -361,12 +386,12 @@ def achievement_user_unlock(interface, grant, user, achievement):
     return True
 
 
-def antiaddiction(interface, grant, guid):
+def antiaddiction(session, grant, guid):
     # Validate the guid given
     if not verify_guid(guid):
         raise ValueError("Invalid user GUID given")
 
-    response = interface.get(endpoints.antiaddiction, auth=grant)
+    response = session.api_get(endpoints.antiaddiction, auth=grant)
 
     if response["Status"] == 404:
         # No such user
@@ -376,19 +401,19 @@ def antiaddiction(interface, grant, guid):
     return response["Result"]
 
 
-def clan_list(interface, grant, tag=None, name=None):
-    response = interface.get(endpoints.clan, auth=grant, clantag=tag, clanname=name)
+def clan_list(session, grant, tag=None, name=None):
+    response = session.api_get(endpoints.clan, auth=grant, clantag=tag, clanname=name)
 
     # Return response
     return response["Result"]
 
 
-def clan_single(interface, grant, guid):
+def clan_single(session, grant, guid):
     # Validate the guid given
     if not verify_guid(guid):
         raise ValueError("Invalid clan GUID given")
 
-    response = interface.get(endpoints.clan_single, guid, auth=grant)
+    response = session.api_get(endpoints.clan_single, guid, auth=grant)
 
     if response["Status"] == 404:
         # No such clan
@@ -398,12 +423,12 @@ def clan_single(interface, grant, guid):
     return response["Result"]
 
 
-def clan_users(interface, grant, guid):
+def clan_users(session, grant, guid):
     # Validate the guid given
     if not verify_guid(guid):
         raise ValueError("Invalid clan GUID given")
 
-    response = interface.get(endpoints.clan_users, guid, auth=grant)
+    response = session.api_get(endpoints.clan_users, guid, auth=grant)
 
     if response["Status"] == 404:
         # No such clan
@@ -413,12 +438,12 @@ def clan_users(interface, grant, guid):
     return response["Result"]
 
 
-def currency_hawken(interface, grant, guid):
+def currency_hawken(session, grant, guid):
     # Validate the guid given
     if not verify_guid(guid):
         raise ValueError("Invalid user GUID given")
 
-    response = interface.get(endpoints.currency_game, guid, auth=grant)
+    response = session.api_get(endpoints.currency_game, guid, auth=grant)
 
     if response["Status"] == 404:
         # No such user
@@ -428,12 +453,12 @@ def currency_hawken(interface, grant, guid):
     return response["Result"]
 
 
-def currency_meteor(interface, grant, guid):
+def currency_meteor(session, grant, guid):
     # Validate the guid given
     if not verify_guid(guid):
         raise ValueError("Invalid user GUID given")
 
-    response = interface.get(endpoints.currency_meteor, guid, auth=grant)
+    response = session.api_get(endpoints.currency_meteor, guid, auth=grant)
 
     if response["Status"] == 404:
         # No such user
@@ -443,26 +468,26 @@ def currency_meteor(interface, grant, guid):
     return response["Result"]
 
 
-def events_url(interface):
-    response = interface.get(endpoints.eventsurl)
+def events_url(session):
+    response = session.api_get(endpoints.eventsurl)
 
     # Return response
     return response["Result"]
 
 
-def game_items(interface, grant):
-    response = interface.get(endpoints.item, auth=grant)
+def game_items(session, grant):
+    response = session.api_get(endpoints.item, auth=grant)
 
     # Return response
     return response["Result"]
 
 
-def game_items_single(interface, grant, guid):
+def game_items_single(session, grant, guid):
     # Validate the guid given
     if not verify_guid(guid):
         raise ValueError("Invalid item GUID given")
 
-    response = interface.get(endpoints.item_single, guid, auth=grant)
+    response = session.api_get(endpoints.item_single, guid, auth=grant)
 
     if response["Status"] == 404:
         # No such item
@@ -472,7 +497,7 @@ def game_items_single(interface, grant, guid):
     return response["Result"]
 
 
-def game_items_batch(interface, grant, guids):
+def game_items_batch(session, grant, guids):
     # Validate the guids given
     if len(guids) == 0:
         raise ValueError("List of item GUIDs cannot be empty")
@@ -480,7 +505,7 @@ def game_items_batch(interface, grant, guids):
         if not verify_guid(guid):
             raise ValueError("Invalid item GUID given")
 
-    response = interface.post(endpoints.item_batch, auth=grant, data=guids)
+    response = session.api_post(endpoints.item_batch, auth=grant, batch=guids)
 
     if response["Status"] == 404:
         # No such item
@@ -490,19 +515,19 @@ def game_items_batch(interface, grant, guids):
     return response["Result"]
 
 
-def game_offers_list(interface, grant):
-    response = interface.get(endpoints.offer, auth=grant)
+def game_offers_list(session, grant):
+    response = session.api_get(endpoints.offer, auth=grant)
 
     # Return response
     return response["Result"]
 
 
-def game_offers_single(interface, grant, guid):
+def game_offers_single(session, grant, guid):
     # Validate the guid given
     if not verify_guid(guid):
         raise ValueError("Invalid offer GUID given")
 
-    response = interface.get(endpoints.offer, auth=grant)
+    response = session.api_get(endpoints.offer, auth=grant)
 
     if response["Status"] == 404:
         # No such offer
@@ -512,7 +537,7 @@ def game_offers_single(interface, grant, guid):
     return response["Result"]
 
 
-def game_offers_batch(interface, grant, guids):
+def game_offers_batch(session, grant, guids):
     # Validate the guids given
     if len(guids) == 0:
         raise ValueError("List of offer GUIDs cannot be empty")
@@ -520,7 +545,7 @@ def game_offers_batch(interface, grant, guids):
         if not verify_guid(guid):
             raise ValueError("Invalid offer GUID given")
 
-    response = interface.post(endpoints.offer_batch, auth=grant, data=guids)
+    response = session.api_post(endpoints.offer_batch, auth=grant, batch=guids)
 
     if response["Status"] == 404:
         # No such offer
@@ -530,7 +555,7 @@ def game_offers_batch(interface, grant, guids):
     return response["Result"]
 
 
-def game_offers_redeem(interface, grant, user, offer, currency, transaction, parent=None):
+def game_offers_redeem(session, grant, user, offer, currency, transaction, parent=None):
     # Validate the guids given
     if not verify_guid(user):
         raise ValueError("Invalid user GUID given")
@@ -550,7 +575,7 @@ def game_offers_redeem(interface, grant, user, offer, currency, transaction, par
         data["ExistingParentInstanceGuid"] = parent
 
     try:
-        response = interface.post(endpoints.offer_redeemer, user, offer, auth=grant, data=data)
+        response = session.api_post(endpoints.offer_redeemer, user, offer, auth=grant, data=data)
     except NotAllowed as e:
         # User does not match access grant user
         raise WrongUser(e.message, e.code)
@@ -575,7 +600,7 @@ def game_offers_redeem(interface, grant, user, offer, currency, transaction, par
     return response["Result"]
 
 
-def game_offers_rent(interface, grant, user, offer, currency, transaction, parent=None):
+def game_offers_rent(session, grant, user, offer, currency, transaction, parent=None):
     # Validate the guids given
     if not verify_guid(user):
         raise ValueError("Invalid user GUID given")
@@ -595,7 +620,7 @@ def game_offers_rent(interface, grant, user, offer, currency, transaction, paren
         data["ExistingParentInstanceGuid"] = parent
 
     try:
-        response = interface.post(endpoints.offer_renter, user, offer, auth=grant, data=data)
+        response = session.api_post(endpoints.offer_renter, user, offer, auth=grant, data=data)
     except NotAllowed as e:
         # User does not match access grant user
         raise WrongUser(e.message, e.code)
@@ -693,12 +718,12 @@ def generate_advertisement_server(gameversion, region, server, owner, users, par
     return advertisement
 
 
-def matchmaking_advertisement(interface, grant, guid):
+def matchmaking_advertisement(session, grant, guid):
     # Validate the guid given
     if not verify_guid(guid):
         raise ValueError("Invalid advertisement GUID given")
 
-    response = interface.get(endpoints.advertisement_single, guid, auth=grant)
+    response = session.api_get(endpoints.advertisement_single, guid, auth=grant)
 
     if response["Status"] == 404:
         # No such advertisement
@@ -708,7 +733,6 @@ def matchmaking_advertisement(interface, grant, guid):
     if response["Result"]["ReadyToDeliver"] and \
        (response["Result"]["AssignedServerIp"] in (None, "") or response["Result"]["AssignedServerPort"] == 0):
         response["Result"]["ReadyToDeliver"] = False
-        logger.debug("Unmarked ready to deliver on incomplete reservation.")
 
     # Fix newline appended to the server IP
     if response["Result"]["AssignedServerIp"] is not None:
@@ -718,15 +742,14 @@ def matchmaking_advertisement(interface, grant, guid):
     if response["Result"]["ReadyToDeliver"] and \
        response["Result"]["RequestedServerGuid"] != "00000000-0000-0000-0000-000000000000" and \
        response["Result"]["AssignedServerGuid"] != response["Result"]["RequestedServerGuid"]:
-        logger.error("Requested server GUID does not matched assigned server GUID.")
         raise InvalidResponse("Requested server GUID does not matched assigned server GUID", response["Status"], response["Result"])
 
     # Return response
     return response["Result"]
 
 
-def matchmaking_advertisement_create(interface, grant, advertisement):
-    response = interface.post(endpoints.advertisement, auth=grant, data=advertisement)
+def matchmaking_advertisement_create(session, grant, advertisement):
+    response = session.api_post(endpoints.advertisement, auth=grant, data=advertisement)
 
     if response["Status"] == 403:
         # Owner does not match access grant user
@@ -736,12 +759,12 @@ def matchmaking_advertisement_create(interface, grant, advertisement):
     return response["Result"]
 
 
-def matchmaking_advertisement_delete(interface, grant, guid):
+def matchmaking_advertisement_delete(session, grant, guid):
     # Validate the guid given
     if not verify_guid(guid):
         raise ValueError("Invalid advertisement GUID given")
 
-    response = interface.delete(endpoints.advertisement_single, guid, auth=grant)
+    response = session.api_delete(endpoints.advertisement_single, guid, auth=grant)
 
     if response["Status"] == 403:
         # Owner does not match access grant user
@@ -759,13 +782,13 @@ def matchmaking_advertisement_delete(interface, grant, guid):
     return False
 
 
-def presence_access(interface, grant, guid):
+def presence_access(session, grant, guid):
     # Validate the guid given
     if not verify_guid(guid):
         raise ValueError("Invalid user GUID given")
 
     try:
-        response = interface.get(endpoints.presence_access, guid, auth=grant)
+        response = session.api_get(endpoints.presence_access, guid, auth=grant)
     except NotAuthorized as e:
         if e.message == "Access grant with matching user GUID required":
             # User does not match access grant user
@@ -777,13 +800,13 @@ def presence_access(interface, grant, guid):
     return response["Result"]
 
 
-def presence_domain(interface, grant, guid):
+def presence_domain(session, grant, guid):
     # Validate the guid given
     if not verify_guid(guid):
         raise ValueError("Invalid user GUID given")
 
     try:
-        response = interface.get(endpoints.presence_domain, guid, auth=grant)
+        response = session.api_get(endpoints.presence_domain, guid, auth=grant)
     except NotAuthorized as e:
         if e.message == "Access grant with matching user GUID required":
             # User does not match access grant user
@@ -795,19 +818,19 @@ def presence_domain(interface, grant, guid):
     return response["Result"]
 
 
-def server_list(interface, grant):
-    response = interface.get(endpoints.server, auth=grant)
+def server_list(session, grant):
+    response = session.api_get(endpoints.server, auth=grant)
 
     # Return response
     return response["Result"]
 
 
-def server_single(interface, grant, guid):
+def server_single(session, grant, guid):
     # Validate the guid given
     if not verify_guid(guid):
         raise ValueError("Invalid server GUID given")
 
-    response = interface.get(endpoints.server_single, guid, auth=grant)
+    response = session.api_get(endpoints.server_single, guid, auth=grant)
 
     if response["Status"] == 404:
         # No such server
@@ -817,19 +840,19 @@ def server_single(interface, grant, guid):
     return response["Result"]
 
 
-def stat_overflow_list(interface, grant):
-    response = interface.get(endpoints.statoverflow, auth=grant)
+def stat_overflow_list(session, grant):
+    response = session.api_get(endpoints.statoverflow, auth=grant)
 
     # Return response
     return response["Result"]
 
 
-def stat_overflow_single(interface, grant, guid):
+def stat_overflow_single(session, grant, guid):
     # Verify guid given
     if not verify_guid(guid):
         raise ValueError("Invalid overflow GUID given")
 
-    response = interface.get(endpoints.statoverflow_single, guid, auth=grant)
+    response = session.api_get(endpoints.statoverflow_single, guid, auth=grant)
 
     if response["Status"] == 404:
         # No such overflow
@@ -839,7 +862,7 @@ def stat_overflow_single(interface, grant, guid):
     return response["Result"]
 
 
-def stat_overflow_transfer_from(interface, grant, user, instance, overflow, amount):
+def stat_overflow_transfer_from(session, grant, user, instance, overflow, amount):
     # Verify guids given
     if not verify_guid(user):
         raise ValueError("Invalid user GUID given")
@@ -853,7 +876,7 @@ def stat_overflow_transfer_from(interface, grant, user, instance, overflow, amou
     data = {"Amount": amount, "OverflowId": overflow}
 
     try:
-        response = interface.put(endpoints.statoverflow_transfer, user, instance, auth=grant, data=data)
+        response = session.api_put(endpoints.statoverflow_transfer, user, instance, auth=grant, data=data)
     except NotAllowed as e:
         # User does not match access grant user
         raise WrongUser(e.message, e.code)
@@ -885,7 +908,7 @@ def stat_overflow_transfer_from(interface, grant, user, instance, overflow, amou
     return False
 
 
-def stat_overflow_transfer_to(interface, grant, user, instance, overflow, amount):
+def stat_overflow_transfer_to(session, grant, user, instance, overflow, amount):
     # Verify guids given
     if not verify_guid(user):
         raise ValueError("Invalid user GUID given")
@@ -899,7 +922,7 @@ def stat_overflow_transfer_to(interface, grant, user, instance, overflow, amount
     data = {"Amount": amount, "OverflowId": overflow}
 
     try:
-        response = interface.put(endpoints.statoverflow_transfer, user, instance, auth=grant, data=data)
+        response = session.api_put(endpoints.statoverflow_transfer, user, instance, auth=grant, data=data)
         # FIXME: Total universal XP not validated before transaction
     except NotAllowed as e:
         # User does not match access grant user
@@ -928,34 +951,34 @@ def stat_overflow_transfer_to(interface, grant, user, instance, overflow, amount
     return False
 
 
-def status_game(interface):
-    response = interface.get(endpoints.status_gameclient)
+def status_game(session):
+    response = session.api_get(endpoints.status_gameclient)
 
     # Return response
     return response
 
 
-def status_services(interface):
-    response = interface.get(endpoints.status_services)
+def status_services(session):
+    response = session.api_get(endpoints.status_services)
 
     # Return response
     return response
 
 
-def uniquevalues_list(interface):
-    response = interface.get(endpoints.uniquevalues)
+def uniquevalues_list(session):
+    response = session.api_get(endpoints.uniquevalues)
 
     # Return response
     return response["Result"]
 
 
-def user_account(interface, grant, identifier):
+def user_account(session, grant, identifier):
     # Check that we don't have a blank identifier
     if not isinstance(identifier, str) or identifier == "":
         raise ValueError("Identifier cannot be blank")
 
     try:
-        response = interface.get(endpoints.user, identifier, auth=grant)
+        response = session.api_get(endpoints.user, identifier, auth=grant)
     except NotAllowed as e:
         # User does not match access grant user
         raise WrongUser(e.message, e.code)
@@ -964,12 +987,12 @@ def user_account(interface, grant, identifier):
     return response["Result"]
 
 
-def user_clan(interface, grant, guid):
+def user_clan(session, grant, guid):
     # Verify guid given
     if not verify_guid(guid):
         raise ValueError("Invalid user GUID given")
 
-    response = interface.get(endpoints.user_clan, guid, auth=grant)
+    response = session.api_get(endpoints.user_clan, guid, auth=grant)
 
     if response["Status"] == 404:
         # No such user/User is not in a clan
@@ -979,13 +1002,13 @@ def user_clan(interface, grant, guid):
     return response["Result"]
 
 
-def user_eula_read(interface, grant, guid):
+def user_eula_read(session, grant, guid):
     # Verify guid given
     if not verify_guid(guid):
         raise ValueError("Invalid user GUID given")
 
     try:
-        response = interface.get(endpoints.user_eula, guid, auth=grant)
+        response = session.api_get(endpoints.user_eula, guid, auth=grant)
     except NotAllowed as e:
         # User does not match access grant user
         raise WrongUser(e.message, e.code)
@@ -994,12 +1017,12 @@ def user_eula_read(interface, grant, guid):
     return response["Result"]
 
 
-def user_game_settings(interface, grant, guid):
+def user_game_settings(session, grant, guid):
     # Validate the guid given
     if not verify_guid(guid):
         raise ValueError("Invalid user GUID given")
 
-    response = interface.get(endpoints.user_settings_single, guid, auth=grant)
+    response = session.api_get(endpoints.user_settings_single, guid, auth=grant)
 
     if response["Status"] == 404:
         # No game settings found
@@ -1009,13 +1032,13 @@ def user_game_settings(interface, grant, guid):
     return response["Result"]
 
 
-def user_game_settings_create(interface, grant, guid, data):
+def user_game_settings_create(session, grant, guid, data):
     # Validate the guid given
     if not verify_guid(guid):
         raise ValueError("Invalid user GUID given")
 
     try:
-        response = interface.post(endpoints.user_settings_single, guid, auth=grant, data=data)
+        response = session.api_post(endpoints.user_settings_single, guid, auth=grant, data=data)
     except NotAllowed as e:
         # User does not match access grant user
         raise WrongUser(e.message, e.code)
@@ -1028,13 +1051,13 @@ def user_game_settings_create(interface, grant, guid, data):
     return False
 
 
-def user_game_settings_update(interface, grant, guid, data):
+def user_game_settings_update(session, grant, guid, data):
     # Validate the guid given
     if not verify_guid(guid):
         raise ValueError("Invalid user GUID given")
 
     try:
-        response = interface.put(endpoints.user_settings_single, guid, auth=grant, data=data)
+        response = session.api_put(endpoints.user_settings_single, guid, auth=grant, data=data)
     except NotAllowed as e:
         # User does not match access grant user
         raise WrongUser(e.message, e.code)
@@ -1051,13 +1074,13 @@ def user_game_settings_update(interface, grant, guid, data):
     return False
 
 
-def user_game_settings_delete(interface, grant, guid):
+def user_game_settings_delete(session, grant, guid):
     # Validate the guid given
     if not verify_guid(guid):
         raise ValueError("Invalid user GUID given")
 
     try:
-        response = interface.delete(endpoints.user_settings_single, guid, auth=grant)
+        response = session.api_delete(endpoints.user_settings_single, guid, auth=grant)
     except NotAllowed as e:
         # User does not match access grant user
         raise WrongUser(e.message, e.code)
@@ -1074,12 +1097,12 @@ def user_game_settings_delete(interface, grant, guid):
     return False
 
 
-def user_guid(interface, callsign):
+def user_guid(session, callsign):
     # Check that we don't have a blank callsign
     if not isinstance(callsign, str) or callsign == "":
         raise ValueError("Callsign cannot be blank")
 
-    response = interface.get(endpoints.uniquevalues_callsign, callsign)
+    response = session.api_get(endpoints.uniquevalues_callsign, callsign)
 
     if response["Status"] == 404:
         # No such user
@@ -1089,12 +1112,12 @@ def user_guid(interface, callsign):
     return response["Result"]["UserGuid"]
 
 
-def user_items(interface, grant, guid):
+def user_items(session, grant, guid):
     # Verify guid given
     if not verify_guid(guid):
         raise ValueError("Invalid user GUID given")
 
-    response = interface.get(endpoints.user_item, guid, auth=grant)
+    response = session.api_get(endpoints.user_item, guid, auth=grant)
 
     if response["Status"] == 404:
         # No such user
@@ -1104,7 +1127,7 @@ def user_items(interface, grant, guid):
     return response["Result"]
 
 
-def user_items_batch(interface, grant, user, items):
+def user_items_batch(session, grant, user, items):
     # Validate the guids given
     if not verify_guid(user):
         raise ValueError("Invalid user GUID given")
@@ -1114,7 +1137,7 @@ def user_items_batch(interface, grant, user, items):
         if not verify_guid(guid):
             raise ValueError("Invalid item instance GUID given")
 
-    response = interface.post(endpoints.user_item_batch, user, auth=grant, data=items)
+    response = session.api_post(endpoints.user_item_batch, user, auth=grant, batch=items)
 
     if response["Status"] == 404:
         if response["Message"] == "Error retrieving batch user game items. If any item doesn't exist the batch will fail.":
@@ -1128,7 +1151,7 @@ def user_items_batch(interface, grant, user, items):
     return response["Result"]
 
 
-def user_items_broker(interface, grant, user, instance, data):
+def user_items_broker(session, grant, user, instance, data):
     # Validate the guids given
     if not verify_guid(user):
         raise ValueError("Invalid user GUID given")
@@ -1136,7 +1159,7 @@ def user_items_broker(interface, grant, user, instance, data):
         raise ValueError("Invalid item instance GUID given")
 
     try:
-        response = interface.put(endpoints.user_item_broker, user, instance, auth=grant, data=data)
+        response = session.api_put(endpoints.user_item_broker, user, instance, auth=grant, data=data)
     except NotAllowed as e:
         # User does not match access grant user
         raise WrongUser(e.message, e.code)
@@ -1157,12 +1180,12 @@ def user_items_broker(interface, grant, user, instance, data):
     return False
 
 
-def user_items_stats(interface, grant, guid):
+def user_items_stats(session, grant, guid):
     # Validate the guid given
     if not verify_guid(guid):
         raise ValueError("Invalid user GUID given")
 
-    response = interface.get(endpoints.user_item_stat, guid, auth=grant)
+    response = session.api_get(endpoints.user_item_stat, guid, auth=grant)
 
     if response["Status"] == 404:
         # No such user
@@ -1172,14 +1195,14 @@ def user_items_stats(interface, grant, guid):
     return response["Result"]
 
 
-def user_items_stats_single(interface, grant, user, instance):
+def user_items_stats_single(session, grant, user, instance):
     # Validate the guids given
     if not verify_guid(user):
         raise ValueError("Invalid user GUID given")
     if not verify_guid(instance):
         raise ValueError("Invalid item instance GUID given")
 
-    response = interface.get(endpoints.user_item_stat_single, user, instance, auth=grant)
+    response = session.api_get(endpoints.user_item_stat_single, user, instance, auth=grant)
 
     if response["Status"] == 404:
         if response["Message"] == "No items found":
@@ -1193,13 +1216,13 @@ def user_items_stats_single(interface, grant, user, instance):
     return response["Result"]
 
 
-def user_meteor_settings(interface, grant, guid):
+def user_meteor_settings(session, grant, guid):
     # Validate the guid given
     if not verify_guid(guid):
         raise ValueError("Invalid user GUID given")
 
     try:
-        response = interface.get(endpoints.user_meteor_single, guid, auth=grant)
+        response = session.api_get(endpoints.user_meteor_single, guid, auth=grant)
     except NotAllowed as e:
         # User does not match access grant user
         raise WrongUser(e.message, e.code)
@@ -1208,12 +1231,12 @@ def user_meteor_settings(interface, grant, guid):
     return response["Result"]
 
 
-def user_publicdata_single(interface, grant, guid):
+def user_publicdata_single(session, grant, guid):
     # Validate the guid given
     if not verify_guid(guid):
         raise ValueError("Invalid user GUID given")
 
-    response = interface.get(endpoints.user_publicdata_single, guid, auth=grant)
+    response = session.api_get(endpoints.user_publicdata_single, guid, auth=grant)
 
     if response["Status"] == 404:
         # No such user
@@ -1223,12 +1246,12 @@ def user_publicdata_single(interface, grant, guid):
     return response["Result"]
 
 
-def user_server(interface, grant, guid):
+def user_server(session, grant, guid):
     # Validate the guid given
     if not verify_guid(guid):
         raise ValueError("Invalid user GUID given")
 
-    response = interface.get(endpoints.server_user, guid, auth=grant)
+    response = session.api_get(endpoints.server_user, guid, auth=grant)
 
     if response["Status"] == 404:
         # No such user/user is not on a server
@@ -1238,12 +1261,12 @@ def user_server(interface, grant, guid):
     return response["Result"]
 
 
-def user_stats_single(interface, grant, guid):
+def user_stats_single(session, grant, guid):
     # Validate the guid given
     if not verify_guid(guid):
         raise ValueError("Invalid user GUID given")
 
-    response = interface.get(endpoints.user_stat_single, guid, auth=grant)
+    response = session.api_get(endpoints.user_stat_single, guid, auth=grant)
 
     if response["Status"] == 404:
         # No such user
@@ -1253,7 +1276,7 @@ def user_stats_single(interface, grant, guid):
     return response["Result"]
 
 
-def user_stats_batch(interface, grant, guids):
+def user_stats_batch(session, grant, guids):
     # Validate the guids given
     if len(guids) == 0:
         raise ValueError("List of user GUIDs cannot be empty")
@@ -1261,18 +1284,18 @@ def user_stats_batch(interface, grant, guids):
         if not verify_guid(guid):
             raise ValueError("Invalid user GUID given")
 
-    response = interface.get(endpoints.user_stat_batch, auth=grant, batch=guids)
+    response = session.api_get(endpoints.user_stat_batch, auth=grant, batch=guids)
 
     # Return response
     return response["Result"]
 
 
-def user_transaction(interface, grant, guid):
+def user_transaction(session, grant, guid):
     # Verify guid given
     if not verify_guid(guid):
         raise ValueError("Invalid user GUID given")
 
-    response = interface.post(endpoints.transaction, guid, auth=grant)
+    response = session.api_post(endpoints.transaction, guid, auth=grant)
 
     if response["Status"] == 404:
         # No such user
@@ -1286,37 +1309,37 @@ def user_transaction(interface, grant, guid):
     return False
 
 
-def version(interface):
-    response = interface.get(endpoints.version)
+def version(session):
+    response = session.api_get(endpoints.version)
 
     # Return response
     return response["Result"]
 
 
-def voice_access(interface, grant, guid):
+def voice_access(session, grant, guid):
     # Validate the guid given
     if not verify_guid(guid):
         raise ValueError("Invalid user GUID given")
 
-    response = interface.get(endpoints.voice_access, guid, auth=grant)
+    response = session.api_get(endpoints.voice_access, guid, auth=grant)
 
     # Return response
     return response["Result"]
 
 
-def voice_info(interface, grant):
-    response = interface.get(endpoints.voice_info, auth=grant)
+def voice_info(session, grant):
+    response = session.api_get(endpoints.voice_info, auth=grant)
 
     # Return response
     return response["Result"]
 
 
-def voice_lookup(interface, grant, guid):
+def voice_lookup(session, grant, guid):
     # Validate the guid given
     if not verify_guid(guid):
         raise ValueError("Invalid vivox user GUID given")
 
-    response = interface.get(endpoints.voice_lookup, guid, auth=grant)
+    response = session.api_get(endpoints.voice_lookup, guid, auth=grant)
 
     if response["Status"] == 404:
         # No such user
@@ -1326,23 +1349,23 @@ def voice_lookup(interface, grant, guid):
     return response["Result"]
 
 
-def voice_user(interface, grant, guid):
+def voice_user(session, grant, guid):
     # Validate the guid given
     if not verify_guid(guid):
         raise ValueError("Invalid user GUID given")
 
-    response = interface.get(endpoints.voice_user, guid, auth=grant)
+    response = session.api_get(endpoints.voice_user, guid, auth=grant)
 
     # Return response
     return response["Result"]
 
 
-def voice_channel(interface, grant, guid):
+def voice_channel(session, grant, guid):
     # Validate the guid given
     if not verify_guid(guid):
         raise ValueError("Invalid channel GUID given")
 
-    response = interface.get(endpoints.voice_channel, guid, auth=grant)
+    response = session.api_get(endpoints.voice_channel, guid, auth=grant)
 
     # Return response
     return response["Result"]

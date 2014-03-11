@@ -183,25 +183,3 @@ class InvalidStatTransfer(ApiException):
     @property
     def is_match(self):
         return self.type != InvalidStatTransfer.Error.NONE
-
-
-class RequestError(Exception):
-    pass
-
-
-class RetryLimitExceeded(Exception):
-    def __init__(self, attempts, exception):
-        self.limit = attempts
-        self.last_exception = exception
-        super(Exception, self).__init__("Retry limit exceeded")
-
-
-def auth_exception(response):
-    if NotAuthenticated.is_missing(response["Message"]):
-        raise NotAuthenticated(response["Message"], response["Status"])
-    if NotAllowed.is_denied(response["Message"]):
-        raise NotAllowed(response["Message"], response["Status"])
-    if AuthenticationFailure.is_badpass(response["Message"]):
-        raise AuthenticationFailure(response["Message"], response["Status"])
-
-    raise NotAuthorized(response["Message"], response["Status"])
