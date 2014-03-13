@@ -8,10 +8,6 @@ import ctypes
 from datetime import datetime
 
 
-def enum(**enums):
-    return type("Enum", (), enums)
-
-
 def chunks(l, n):
     return [l[i:i + n] for i in range(0, len(l), n)]
 
@@ -23,22 +19,32 @@ def verify_guid(guid):
     return True
 
 
-def create_bitfield(*fields):
-    field_list = []
-    for field in fields:
-        field_list.append((field, ctypes.c_uint8, 1))
+def create_flags(*flags):
+    class Flags:
+        def __init__(self, *args):
+            self._flags = {}
 
-    class Bits(ctypes.LittleEndianStructure):
-        _fields_ = field_list
+            for flag in flags:
+                self._flags[flag] = False
 
-        def __init__(self, bits=None):
-            super().__init__()
+            for flag in args:
+                setattr(self, flag, True)
 
-            if bits is not None:
-                for bit in list(bits):
-                    setattr(self, bit, 1)
+        def __getattr__(self, name):
+            try:
+                return self._flags[name]
+            except KeyError:
+                raise AttributeError
 
-    return Bits
+        def __setattr__(self, name, value):
+            if name.startswith("_"):
+                object.__setattr__(self, name, value)
+            elif name not in flags:
+                raise ValueError("Not a valid flag")
+            
+            self._flags[name] = bool(value)
+
+    return Flags
 
 
 class JWTParser:

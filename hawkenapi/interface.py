@@ -104,7 +104,7 @@ class Session(requests.Session):
         # Verify endpoint support
         if method not in endpoint.methods:
             raise ValueError("Endpoint does not support {0} method".format(method))
-        if data and method == Methods.GET:
+        if data and method == Methods.get:
             raise ValueError("The {0} method does not take a request body".format(method))
         if not auth and endpoint.flags.authrequired:
             raise ValueError("Endpoint requires an access grant")
@@ -194,16 +194,16 @@ class Session(requests.Session):
         return self.perform_request(request, check=check)
 
     def api_get(self, endpoint, *args, **kwargs):
-        return self.api_call(Methods.GET, endpoint, *args, **kwargs)
+        return self.api_call(Methods.get, endpoint, *args, **kwargs)
 
     def api_post(self, endpoint, *args, **kwargs):
-        return self.api_call(Methods.POST, endpoint, *args, **kwargs)
+        return self.api_call(Methods.post, endpoint, *args, **kwargs)
 
     def api_put(self, endpoint, *args, **kwargs):
-        return self.api_call(Methods.PUT, endpoint, *args, **kwargs)
+        return self.api_call(Methods.put, endpoint, *args, **kwargs)
 
     def api_delete(self, endpoint, *args, **kwargs):
-        return self.api_call(Methods.DELETE, endpoint, *args, **kwargs)
+        return self.api_call(Methods.delete, endpoint, *args, **kwargs)
 
 
 def auth(session, username, password):

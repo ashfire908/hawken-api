@@ -1,15 +1,22 @@
 # -*- coding: utf-8 -*-
 
+from enum import Enum
 from sleekxmpp import Message
 from sleekxmpp.plugins.base import base_plugin
 from sleekxmpp.xmlstream import register_stanza_plugin
 from sleekxmpp.xmlstream.handler import Callback
 from sleekxmpp.xmlstream.matcher import StanzaPath
 from hawkenapi.sleekxmpp.stanza import StormId, PartyMemberData, PartyVoiceChannel, MemberDataCodes
-from hawkenapi.util import enum
 
 
-CancelCode = enum(PARTYCANCEL="0", LEADERCANCEL="1", LEADERCHANGE="2", NOMATCH="3", MEMBERJOIN="4", MEMBERLEFT="5", MEMBERKICK="6")
+class CancelCode(str, Enum):
+    partycancel = "0"
+    leadercancel = "1"
+    leaderchange = "2"
+    nomatch = "3"
+    memberjoin = "4"
+    memberleft = "5"
+    memberkick = "6"
 
 
 class Hawken_Party(base_plugin):
@@ -101,7 +108,7 @@ class Hawken_Party(base_plugin):
 
         # Send invite notification
         value = "{0} has invited {1} to the party.".format(self.get_callsign(room), callsign)
-        self._party_notice(room, sender, MemberDataCodes.InvitePlayer, value)
+        self._party_notice(room, sender, MemberDataCodes.invite_player, value)
 
     def kick(self, room, callsign, reason=None):
         # Kick the user
@@ -137,19 +144,19 @@ class Hawken_Party(base_plugin):
 
     def matchmaking_start(self, room, sender):
         # Send matchmaking start notice
-        self._party_notice(room, sender, MemberDataCodes.MatchmakingStart, "NoData")
+        self._party_notice(room, sender, MemberDataCodes.matchmaking_start, "NoData")
 
-    def matchmaking_cancel(self, room, sender, code=CancelCode.PARTYCANCEL):
+    def matchmaking_cancel(self, room, sender, code=CancelCode.partycancel):
         # Send matchmaking cancel notice
-        self._party_notice(room, sender, MemberDataCodes.MatchmakingCancel, code)
+        self._party_notice(room, sender, MemberDataCodes.matchmaking_cancel, code)
 
     def deploy_start(self, room, sender, guid, ip, port):
         # Send deploy start notice
-        self._party_notice(room, sender, MemberDataCodes.DeployParty, ";".join((guid, ip, str(port))))
+        self._party_notice(room, sender, MemberDataCodes.deploy_party, ";".join((guid, ip, str(port))))
 
-    def deploy_cancel(self, room, sender, code=CancelCode.PARTYCANCEL):
+    def deploy_cancel(self, room, sender, code=CancelCode.partycancel):
         # Send deploy cancel notice
-        self._party_notice(room, sender, MemberDataCodes.DeployCancel, code)
+        self._party_notice(room, sender, MemberDataCodes.deploy_cancel, code)
 
     def game_start(self, room):
         # Create room config for update

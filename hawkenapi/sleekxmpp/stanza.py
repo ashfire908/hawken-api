@@ -1,9 +1,15 @@
 # -*- coding: utf-8 -*-
 
+from enum import Enum
 from sleekxmpp.xmlstream.stanzabase import ElementBase
-from hawkenapi.util import enum
 
-MemberDataCodes = enum(InvitePlayer="InvitePlayerToParty", MatchmakingStart="PartyMatchmakingStart", MatchmakingCancel="PartyMatchmakingCancel", DeployParty="DeployPartyData", DeployCancel="DeployCancelData")
+
+class MemberDataCodes(str, Enum):
+    invite_player = "InvitePlayerToParty"
+    matchmaking_start = "PartyMatchmakingStart"
+    matchmaking_cancel = "PartyMatchmakingCancel"
+    deploy_party = "DeployPartyData"
+    deploy_cancel = "DeployCancelData"
 
 
 class GameInvite(ElementBase):

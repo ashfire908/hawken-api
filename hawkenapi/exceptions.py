@@ -2,7 +2,7 @@
 # API Exceptions
 
 import re
-from hawkenapi.util import enum
+from enum import Enum
 
 
 class ApiException(Exception):
@@ -150,12 +150,17 @@ class InvalidStatTransfer(ApiException):
     _re_notamultiple = re.compile(r"^Transfer must be a multiple of StatPerCurrency$")
     _re_insufficient = re.compile(r"^User does not have enough ([A-Za-z0-9]+)$")
 
-    Error = enum(NONE=0, NOTENOUGH=1, TOOMANY=2, NOTAMULTIPLE=3, INSUFFICIENT=4)
+    class Error(Enum):
+        none = 0
+        notenough = 1
+        toomany = 2
+        notamultiple = 3
+        insufficient = 4
 
     def __init__(self, message, code):
         super(InvalidStatTransfer, self).__init__(message, code)
 
-        self.type = InvalidStatTransfer.Error.NONE
+        self.type = InvalidStatTransfer.Error.none
         self.item = None
         self.stat = None
         self.requested = None
@@ -164,7 +169,7 @@ class InvalidStatTransfer(ApiException):
         # Parse out the metadata
         match = InvalidStatTransfer._re_notenough.match(message)
         if match:
-            self.type = InvalidStatTransfer.Error.NOTENOUGH
+            self.type = InvalidStatTransfer.Error.notenough
             self.item = match.group(1)
             self.stat = match.group(2)
             self.requested = int(match.group(3))
@@ -172,7 +177,7 @@ class InvalidStatTransfer(ApiException):
         else:
             match = InvalidStatTransfer._re_toomany.match(message)
             if match:
-                self.type = InvalidStatTransfer.Error.TOOMANY
+                self.type = InvalidStatTransfer.Error.toomany
                 self.item = match.group(1)
                 self.stat = match.group(2)
                 self.requested = int(match.group(3))
@@ -180,13 +185,13 @@ class InvalidStatTransfer(ApiException):
             else:
                 match = InvalidStatTransfer._re_notamultiple.match(message)
                 if match:
-                    self.type = InvalidStatTransfer.Error.NOTAMULTIPLE
+                    self.type = InvalidStatTransfer.Error.notamultiple
                 else:
                     match = InvalidStatTransfer._re_insufficient.match(message)
                     if match:
-                        self.type = InvalidStatTransfer.Error.INSUFFICIENT
+                        self.type = InvalidStatTransfer.Error.insufficient
                         self.stat = match.group(1)
 
     @property
     def is_match(self):
-        return self.type != InvalidStatTransfer.Error.NONE
+        return self.type != InvalidStatTransfer.Error.none

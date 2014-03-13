@@ -1,5 +1,10 @@
 # -*- coding: utf-8 -*-
 
-from hawkenapi.util import enum
+from enum import IntEnum
 
-MatchState = enum(UNAVAILABLE=0, PREMATCH=1, INPROGRESS=2, POSTMATCH=3)
+
+class MatchState(IntEnum):
+    unavailable = 0
+    prematch = 1
+    inprogress = 2
+    postmatch = 3
