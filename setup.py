@@ -9,6 +9,7 @@ setup(name="hawkenapi",
       author="Andrew Hampe",
       author_email="andrew.hampe@gmail.com",
       packages=["hawkenapi", "hawkenapi.sleekxmpp"],
+      install_requires=["requests", "enum34"],
       classifiers=(
           'Development Status :: 3 - Alpha',
           'Intended Audience :: Developers',
