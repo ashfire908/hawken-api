@@ -923,7 +923,6 @@ def stat_overflow_transfer_to(session, grant, user, instance, overflow, amount):
 
     try:
         response = session.api_put(endpoints.statoverflow_transfer, user, instance, auth=grant, data=data)
-        # FIXME: Total universal XP not validated before transaction
     except NotAllowed as e:
         # User does not match access grant user
         raise WrongUser(e.message, e.code)

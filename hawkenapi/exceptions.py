@@ -146,10 +146,11 @@ class InsufficientFunds(ApiException):
 
 class InvalidStatTransfer(ApiException):
     _re_notenough = re.compile(r"^Item ([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-4[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}) does not have enough ([A-Za-z0-9]+) to transfer\.\s+Actual: ([0-9]+) Required ([0-9]+)$")
-    _re_toomuch = re.compile(r"^Item ([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-4[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}) has too many ([A-Za-z0-9]+) to transfer\.\s+Proposed: ([0-9]+) Cap: ([0-9]+)$")
+    _re_toomany = re.compile(r"^Item ([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-4[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}) has too many ([A-Za-z0-9]+) to transfer\.\s+Proposed: ([0-9]+) Cap: ([0-9]+)$")
     _re_notamultiple = re.compile(r"^Transfer must be a multiple of StatPerCurrency$")
+    _re_insufficient = re.compile(r"^User does not have enough ([A-Za-z0-9]+)$")
 
-    Error = enum(NONE=0, NOTENOUGH=1, TOOMUCH=2, NOTAMULTIPLE=3)
+    Error = enum(NONE=0, NOTENOUGH=1, TOOMANY=2, NOTAMULTIPLE=3, INSUFFICIENT=4)
 
     def __init__(self, message, code):
         super(InvalidStatTransfer, self).__init__(message, code)
@@ -163,22 +164,28 @@ class InvalidStatTransfer(ApiException):
         # Parse out the metadata
         match = InvalidStatTransfer._re_notenough.match(message)
         if match:
-            self._set_match(InvalidStatTransfer.Error.NOTENOUGH, match)
+            self.type = InvalidStatTransfer.Error.NOTENOUGH
+            self.item = match.group(1)
+            self.stat = match.group(2)
+            self.requested = int(match.group(3))
+            self.threshold = int(match.group(4))
         else:
-            match = InvalidStatTransfer._re_toomuch.match(message)
+            match = InvalidStatTransfer._re_toomany.match(message)
             if match:
-                self._set_match(InvalidStatTransfer.Error.TOOMUCH, match)
+                self.type = InvalidStatTransfer.Error.TOOMANY
+                self.item = match.group(1)
+                self.stat = match.group(2)
+                self.requested = int(match.group(3))
+                self.threshold = int(match.group(4))
             else:
                 match = InvalidStatTransfer._re_notamultiple.match(message)
                 if match:
-                    self._set_match(InvalidStatTransfer.Error.NOTAMULTIPLE, match)
-
-    def _set_match(self, _type, match):
-        self.type = _type
-        self.item = match.group(1)
-        self.stat = match.group(2)
-        self.requested = int(match.group(3))
-        self.threshold = int(match.group(4))
+                    self.type = InvalidStatTransfer.Error.NOTAMULTIPLE
+                else:
+                    match = InvalidStatTransfer._re_insufficient.match(message)
+                    if match:
+                        self.type = InvalidStatTransfer.Error.INSUFFICIENT
+                        self.stat = match.group(1)
 
     @property
     def is_match(self):
