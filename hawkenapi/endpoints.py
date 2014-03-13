@@ -22,8 +22,7 @@ class Endpoint:
 
     def format(self, *arguments, **fields):
         # Quote the arguments
-        for argument in arguments:
-            argument = urllib.parse.quote(argument)
+        arguments = [urllib.parse.quote(argument) for argument in arguments]
 
         # Generate the endpoint
         endpoint = self._endpoint.format(*arguments)
