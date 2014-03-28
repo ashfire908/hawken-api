@@ -5,7 +5,7 @@ from datetime import datetime
 import logging
 from hawkenapi.interface import *
 from hawkenapi.exceptions import NotAuthenticated, NotAuthorized, InvalidBatch
-from hawkenapi.util import JWTParser, chunks
+from hawkenapi.util import JWTParser
 
 __all__ = ["AccessGrant", "Client"]
 
@@ -73,7 +73,6 @@ class Client:
         self.identifier = None
         self.password = None
 
-        self._batch_limit = 200
 
     @property
     def grant(self):
@@ -143,12 +142,7 @@ class Client:
 
             return data[0]
 
-        # Perform a chunked batch request
-        data = []
-        for chunk in chunks(achievement, self._batch_limit):
-            data.extend(achievement_batch(self.session, self.grant, chunk, countrycode=countrycode))
-
-        return data
+        return achievement_batch(self.session, self.grant, achievement, countrycode=countrycode)
 
     @require_auth
     def get_achievement_rewards_list(self, countrycode=None):
@@ -159,12 +153,7 @@ class Client:
         if isinstance(achievement, str):
             return achievement_reward_single(self.session, self.grant, achievement, countrycode=countrycode)
 
-        # Perform a chunked batch request
-        data = []
-        for chunk in chunks(achievement, self._batch_limit):
-            data.extend(achievement_reward_batch(self.session, self.grant, chunk, countrycode=countrycode))
-
-        return data
+        return achievement_reward_batch(self.session, self.grant, achievement, countrycode=countrycode)
 
     @require_auth
     def get_user_achievements_list(self, user):
@@ -184,17 +173,7 @@ class Client:
 
             return data
 
-        # Perform a chunked batch request
-        data = []
-        for chunk in chunks(achievement, self._batch_limit):
-            response = achievement_user_batch(self.session, self.grant, user, chunk)
-            if response is None:
-                # No such user
-                return None
-
-            data.extend(response)
-
-        return data
+        return achievement_user_batch(self.session, self.grant, user, achievement)
 
     @require_auth
     def unlock_achievement(self, achievement):
@@ -409,12 +388,7 @@ class Client:
         if isinstance(user, str):
             return user_stats_single(self.session, self.grant, user)
 
-        # Perform a chunked batch request
-        data = []
-        for chunk in chunks(user, self._batch_limit):
-            data.extend(user_stats_batch(self.session, self.grant, chunk))
-
-        return data
+        return user_stats_batch(self.session, self.grant, user)
 
     @require_auth
     def create_transaction(self):
