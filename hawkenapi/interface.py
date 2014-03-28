@@ -121,7 +121,7 @@ class Session(requests.Session):
             if endpoint.flags.batchheader:
                 # Batch header
                 headers["X-Meteor-Batch"] = ",".join(batch)
-            elif endpoint.flags.batchbody:
+            elif endpoint.flags.batchpost:
                 if data:
                     raise ValueError("Endpoint cannot take data in a batched request")
 
