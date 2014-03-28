@@ -313,8 +313,8 @@ class Client:
         return user_clan(self.session, self.grant, user)
 
     @require_auth
-    def get_eula_status(self):
-        return user_eula_read(self.session, self.grant, self.guid)
+    def get_eula_status(self, user):
+        return user_eula_read(self.session, self.grant, user)
 
     @require_auth
     def get_user_game_settings(self, user):
@@ -368,8 +368,8 @@ class Client:
         return user_items_stats_single(self.session, self.grant, user, item)
 
     @require_auth
-    def get_meteor_settings(self):
-        return user_meteor_settings(self.session, self.grant, self.guid)
+    def get_meteor_settings(self, user):
+        return user_meteor_settings(self.session, self.grant, user)
 
     @require_auth
     def get_user_legacy_data(self, user):
