@@ -391,7 +391,7 @@ def antiaddiction(session, grant, guid):
     if not verify_guid(guid):
         raise ValueError("Invalid user GUID given")
 
-    response = session.api_get(endpoints.antiaddiction, auth=grant)
+    response = session.api_get(endpoints.antiaddiction, guid, auth=grant)
 
     if response["Status"] == 404:
         # No such user
@@ -527,7 +527,7 @@ def game_offers_single(session, grant, guid):
     if not verify_guid(guid):
         raise ValueError("Invalid offer GUID given")
 
-    response = session.api_get(endpoints.offer, auth=grant)
+    response = session.api_get(endpoints.offer_single, guid, auth=grant)
 
     if response["Status"] == 404:
         # No such offer
