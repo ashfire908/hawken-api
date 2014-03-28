@@ -17,6 +17,8 @@ logger = logging.getLogger(__name__)
 # Decorators
 def require_auth(f):
     def auth_handler(self, *args, **kwargs):
+        reauthed = False
+
         # Check if we have authenticated
         if not self.authed:
             logger.error("Auth-required request made but no authentication has been performed.")
@@ -25,12 +27,13 @@ def require_auth(f):
         elif self.grant.is_expired:
             logger.info("Automatically authenticating [expired]")
             self.reauth()
+            reauthed = True
 
         try:
             response = f(self, *args, **kwargs)
         except NotAuthorized as e:
             # Only reauth if the grant expired
-            if e.expired:
+            if e.expired and not reauthed:
                 logger.info("Automatically authenticating [reauth] ([{0}] {1})".format(e.code, e.message))
                 self.reauth()
                 response = f(self, *args, **kwargs)
