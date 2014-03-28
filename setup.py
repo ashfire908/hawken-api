@@ -11,9 +11,9 @@ setup(name="hawkenapi",
       packages=["hawkenapi", "hawkenapi.sleekxmpp"],
       install_requires=["requests", "enum34"],
       classifiers=(
-          'Development Status :: 3 - Alpha',
-          'Intended Audience :: Developers',
-          'Natural Language :: English',
-          'Programming Language :: Python :: 3.3'
+          "Development Status :: 3 - Alpha",
+          "Intended Audience :: Developers",
+          "Natural Language :: English",
+          "Programming Language :: Python :: 3.3"
       )
 )

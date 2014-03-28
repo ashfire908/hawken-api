@@ -4,7 +4,6 @@
 import re
 import base64
 import json
-import ctypes
 from datetime import datetime
 
 
@@ -41,7 +40,7 @@ def create_flags(*flags):
                 object.__setattr__(self, name, value)
             elif name not in flags:
                 raise ValueError("Not a valid flag")
-            
+
             self._flags[name] = bool(value)
 
     return Flags
