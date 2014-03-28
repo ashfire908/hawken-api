@@ -40,10 +40,11 @@ class Endpoint:
         # Verify the query fields
         query = {}
         if len(fields) > 0:
-            field_search = [field.lower() for field in self.fields]
-            for field, value in fields.items():
-                if field.lower in field_search and value is not None:
-                    query[field] = value
+            fields = {field.lower(): value for field, value in fields.items()}
+            for field in self.fields:
+                k = field.lower()
+                if k in fields and fields[k] is not None:
+                    query[field] = fields[k]
 
         return query
 
