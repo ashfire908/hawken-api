@@ -43,7 +43,7 @@ class MeteorAuth(AuthBase):
 
 # Session
 class Session(requests.Session):
-    def __init__(self, host=None, stack=None, scheme=None, pool_connections=DEFAULT_POOLSIZE, pool_maxsize=DEFAULT_POOLSIZE, max_retries=DEFAULT_RETRIES):
+    def __init__(self, host=None, stack=None, scheme=None, timeout=None, pool_connections=DEFAULT_POOLSIZE, pool_maxsize=DEFAULT_POOLSIZE, max_retries=DEFAULT_RETRIES):
         super(Session, self).__init__()
 
         # Set the user agent
@@ -62,6 +62,9 @@ class Session(requests.Session):
             self.scheme = scheme
         else:
             self.scheme = "http"
+
+        # Set the timeout
+        self.timeout = timeout
 
         # Set up the adapter
         adapter = HTTPAdapter(pool_connections=pool_connections, pool_maxsize=pool_maxsize, max_retries=max_retries)
@@ -143,7 +146,7 @@ class Session(requests.Session):
         return request
 
     def perform_request(self, request, check=True):
-        response = self.send(request)
+        response = self.send(request, timeout=self.timeout)
 
         # Check for HTTP errors
         if response.status_code != requests.codes.ok:
