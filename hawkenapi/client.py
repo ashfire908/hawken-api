@@ -207,10 +207,12 @@ class Client:
         return events_url(self.session)
 
     @require_auth
-    def get_game_items(self, item=None):
-        if item is None:
-            return game_items(self.session, self.grant)
-        elif isinstance(item, str):
+    def get_game_items_list(self):
+        return game_items(self.session, self.grant)
+
+    @require_auth
+    def get_game_items(self, item):
+        if isinstance(item, str):
             return game_items_single(self.session, self.grant, item)
 
         return game_items_batch(self.session, self.grant, item)
@@ -263,10 +265,11 @@ class Client:
         return presence_domain(self.session, self.grant, self.guid)
 
     @require_auth
-    def get_server(self, server=None):
-        if server is None:
-            return server_list(self.session, self.grant)
+    def get_server_list(self):
+        return server_list(self.session, self.grant)
 
+    @require_auth
+    def get_server(self, server):
         return server_single(self.session, self.grant, server)
 
     @require_auth
@@ -333,10 +336,12 @@ class Client:
         return user_guid(self.session, callsign)
 
     @require_auth
-    def get_user_items(self, user, item=None):
-        if item is None:
-            return user_items(self.session, self.grant, user)
-        elif isinstance(item, str):
+    def get_user_items_list(self, user):
+        return user_items(self.session, self.grant, user)
+
+    @require_auth
+    def get_user_items(self, user, item):
+        if isinstance(item, str):
             # Emulate a single-type request
             try:
                 data = user_items_batch(self.session, self.grant, user, [item])
@@ -355,10 +360,11 @@ class Client:
         return user_items_broker(self.session, self.grant, self.guid, item, data)
 
     @require_auth
-    def get_user_item_stats(self, user, item=None):
-        if item is None:
-            return user_items_stats(self.session, self.grant, user)
+    def get_user_items_stats_list(self, user):
+        return user_items_stats(self.session, self.grant, user)
 
+    @require_auth
+    def get_user_item_stats(self, user, item):
         return user_items_stats_single(self.session, self.grant, user, item)
 
     @require_auth
