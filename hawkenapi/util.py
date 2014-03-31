@@ -75,3 +75,9 @@ class JWTParser:
     @staticmethod
     def parse_timestamp(s):
         return datetime.strptime(s, "%a, %d %b %Y %H:%M:%S %Z")
+
+
+def copyappend(l, x):
+    a = l[:]
+    a.append(x)
+    return a
