@@ -21,12 +21,12 @@ __all__ = ["Session", "auth", "deauth", "achievement_list", "achievement_batch",
            "generate_advertisement_matchmaking", "generate_advertisement_server", "matchmaking_advertisement",
            "matchmaking_advertisement_create", "matchmaking_advertisement_delete", "presence_access", "presence_domain",
            "server_list", "server_single", "stat_overflow_list", "stat_overflow_single", "stat_overflow_transfer_from",
-           "stat_overflow_transfer_to", "status_game", "status_services", "user_transaction", "uniquevalues_list",
-           "user_account", "user_clan", "user_eula_read", "user_game_settings", "user_game_settings_create",
-           "user_game_settings_update", "user_game_settings_delete", "user_guid", "user_items", "user_items_batch",
-           "user_items_broker", "user_items_stats", "user_items_stats_single", "user_meteor_settings",
-           "user_publicdata_single", "user_server", "user_stats_single", "user_stats_batch", "version", "voice_access",
-           "voice_info", "voice_lookup", "voice_user", "voice_channel"]
+           "stat_overflow_transfer_to", "status_game_client", "status_game_servers", "status_services",
+           "user_transaction", "uniquevalues_list", "user_account", "user_clan", "user_eula_read", "user_game_settings",
+           "user_game_settings_create", "user_game_settings_update", "user_game_settings_delete", "user_guid",
+           "user_items", "user_items_batch", "user_items_broker", "user_items_stats", "user_items_stats_single",
+           "user_meteor_settings", "user_publicdata_single", "user_server", "user_stats_single", "user_stats_batch",
+           "version", "voice_access", "voice_info", "voice_lookup", "voice_user", "voice_channel"]
 
 batch_limit = 200
 
@@ -976,6 +976,10 @@ def stat_overflow_transfer_to(session, grant, user, instance, overflow, amount):
         # No such item
         return None
 
+    if response["Status"] == 412:
+        # Not enough currency
+        raise InsufficientFunds(response["Message"], response["Status"])
+
     if response["Status"] == 200:
         # Success
         return True
@@ -984,15 +988,22 @@ def stat_overflow_transfer_to(session, grant, user, instance, overflow, amount):
     return False
 
 
-def status_game(session):
-    response = session.api_get(endpoints.status_gameclient)
+def status_game_client(session):
+    response = session.api_get(endpoints.status_gameclient, check=False)
+
+    # Return response
+    return response
+
+
+def status_game_servers(session):
+    response = session.api_get(endpoints.status_gameservers, check=False)
 
     # Return response
     return response
 
 
 def status_services(session):
-    response = session.api_get(endpoints.status_services)
+    response = session.api_get(endpoints.status_services, check=False)
 
     # Return response
     return response

@@ -86,6 +86,7 @@ statoverflow = Endpoint("statOverflow", methods=(Methods.get, ), flags=("authreq
 statoverflow_single = Endpoint("statOverflow/{0}", methods=(Methods.get, ), flags=("authrequired", ))
 statoverflow_transfer = Endpoint("users/{0}/statTransfer/{1}", methods=(Methods.post, Methods.put), flags=("authrequired", ))
 status_gameclient = Endpoint("status/game_client", methods=(Methods.get, ))
+status_gameservers = Endpoint("status/game_servers", methods=(Methods.get, ))
 status_services = Endpoint("status/services", methods=(Methods.get, ))
 transaction = Endpoint("userGameTransaction/{0}", methods=(Methods.post, ), flags=("authrequired", ))
 uniquevalues = Endpoint("uniqueValues", methods=(Methods.get, ))

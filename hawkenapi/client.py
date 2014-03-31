@@ -340,9 +340,13 @@ class Client:
     def transfer_stat_overflow_to_item(self, item, overflow, amount):
         return stat_overflow_transfer_to(self.session, self.grant, self.guid, item, overflow, amount)
 
-    @SingleItem("game_status", expiry="status")
-    def get_game_status(self):
-        return status_game(self.session)
+    @SingleItem("game_client_status", expiry="status")
+    def get_game_client_status(self):
+        return status_game_client(self.session)
+
+    @SingleItem("game_servers_status", expiry="status")
+    def get_game_servers_status(self):
+        return status_game_servers(self.session)
 
     @SingleItem("services_status", expiry="status")
     def get_services_status(self):
