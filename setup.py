@@ -10,10 +10,15 @@ setup(name="hawkenapi",
       author_email="andrew.hampe@gmail.com",
       packages=["hawkenapi", "hawkenapi.sleekxmpp"],
       install_requires=["requests", "enum34"],
+      extras_require={
+          "RedisCache": ["msgpack-python", "redis"],
+          "XMPP": ["sleekxmpp"]
+      },
       classifiers=(
           "Development Status :: 3 - Alpha",
           "Intended Audience :: Developers",
           "Natural Language :: English",
-          "Programming Language :: Python :: 3.3"
+          "Programming Language :: Python :: 3.3",
+          "Programming Language :: Python :: 3.4"
       )
 )
