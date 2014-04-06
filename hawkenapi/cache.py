@@ -22,9 +22,9 @@ class Expiry:
     globals = 10800  # 3 hours
     persistent = 25200  # 1 week
     server = 60  # 1 minute
-    stats = 60  # 1 minute
+    stats = 300  # 5 minutes
     status = 60  # 1 minute
-    user = 60  # 5 minutes
+    user = 300  # 5 minutes
 
     def get_class(self, eclass):
         return getattr(self, eclass, self.default)
@@ -38,9 +38,9 @@ class Cache(metaclass=ABCMeta):
         self.expiry = Expiry()
 
     def format_key(self, identifier, *args, **kwargs):
-        # Format: prefix::identifier:arg1.arg2#key=value|key=value
+        # Format: prefix:identifier:arg1.arg2#key=value|key=value
         # Create the base key
-        key = self.prefix + "::" + identifier
+        key = self.prefix + ":" + identifier
 
         # Append the arguments
         if len(args) > 0:
@@ -54,7 +54,7 @@ class Cache(metaclass=ABCMeta):
         return key.lower()
 
     def format_lock_key(self, identifier, *args, **kwargs):
-        # Format: lock$prefix::identifier:arg1.arg2#key=value|key=value
+        # Format: lock$prefix:identifier:arg1.arg2#key=value|key=value
         return "lock$" + self.format_key(identifier, *args, **kwargs)
 
     def get_expiry(self, eclass):
