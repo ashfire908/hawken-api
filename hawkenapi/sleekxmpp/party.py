@@ -10,13 +10,13 @@ from hawkenapi.sleekxmpp.stanza import StormId, PartyMemberData, PartyVoiceChann
 
 
 class CancelCode(str, Enum):
-    partycancel = "0"
-    leadercancel = "1"
-    leaderchange = "2"
-    nomatch = "3"
-    memberjoin = "4"
-    memberleft = "5"
-    memberkick = "6"
+    none = "0"
+    leader_action = "1"
+    leader_change = "2"
+    match_failure = "3"
+    member_join = "4"
+    member_left = "5"
+    member_kicked = "6"
 
 
 class Hawken_Party(base_plugin):
@@ -146,17 +146,26 @@ class Hawken_Party(base_plugin):
         # Send matchmaking start notice
         self._party_notice(room, sender, MemberDataCodes.matchmaking_start, "NoData")
 
-    def matchmaking_cancel(self, room, sender, code=CancelCode.partycancel):
+    def matchmaking_cancel(self, room, sender, code=CancelCode.none):
         # Send matchmaking cancel notice
         self._party_notice(room, sender, MemberDataCodes.matchmaking_cancel, code)
 
-    def deploy_start(self, room, sender, guid, ip, port):
+    def deploy_start(self, room, sender, countdown):
         # Send deploy start notice
-        self._party_notice(room, sender, MemberDataCodes.deploy_party, ";".join((guid, ip, str(port))))
+        self._party_notice(room, sender, MemberDataCodes.deploy_party, str(countdown))
 
-    def deploy_cancel(self, room, sender, code=CancelCode.partycancel):
+    def deploy_cancel(self, room, sender, code=CancelCode.none):
         # Send deploy cancel notice
         self._party_notice(room, sender, MemberDataCodes.deploy_cancel, code)
+
+    def travel_request(self, room, sender, guid, ip, port, has_reservation):
+        if has_reservation:
+            has_reservation = "1"
+        else:
+            has_reservation = "0"
+
+        # Send travel request notice
+        self._party_notice(room, sender, MemberDataCodes.travel_request, ";".join((guid, ip, str(port), has_reservation)))
 
     def game_start(self, room):
         # Create room config for update

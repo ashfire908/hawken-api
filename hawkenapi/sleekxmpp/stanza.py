@@ -10,6 +10,7 @@ class MemberDataCodes(str, Enum):
     matchmaking_cancel = "PartyMatchmakingCancel"
     deploy_party = "DeployPartyData"
     deploy_cancel = "DeployCancelData"
+    travel_request = "TravelRequestPartyData"
 
 
 class GameInvite(ElementBase):
