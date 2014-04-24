@@ -34,6 +34,10 @@ class AccountBanned(ApiException):
         self.reason = result
 
 
+class AccountDeactivated(ApiException):
+    pass
+
+
 class NotAuthenticated(ApiException):
     _re_missing = re.compile(r"^Invalid Access Grant$")
 

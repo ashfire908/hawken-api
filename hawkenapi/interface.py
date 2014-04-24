@@ -10,7 +10,7 @@ from hawkenapi import endpoints
 from hawkenapi.endpoints import Methods
 from hawkenapi.exceptions import AuthenticationFailure, NotAuthorized, InternalServerError, \
     ServiceUnavailable, WrongUser, InvalidRequest, InvalidBatch, InvalidResponse, NotAuthenticated, \
-    NotAllowed, InsufficientFunds, InvalidStatTransfer, AccountBanned
+    NotAllowed, InsufficientFunds, InvalidStatTransfer, AccountBanned, AccountDeactivated
 from hawkenapi.util import verify_guid, chunks
 
 __all__ = ["Session", "auth", "deauth", "achievement_list", "achievement_batch", "achievement_reward_list",
@@ -226,13 +226,17 @@ def auth(session, username, password):
         # Return response
         return response["Result"]
 
-    if response["Status"] == 401 or response["Status"] == 404 or response["Status"] == 400:
-        # Rejected authentication (No such user/Blank password/Incorrect password)
-        raise AuthenticationFailure(response["Message"], response["Status"])
+    if response["Status"] == 401 and response["Message"] == "User deactivated":
+        # Account deactivated
+        raise AccountDeactivated(response["Message"], response["Status"])
 
     if response["Status"] == 403:
         # Account banned
         raise AccountBanned(response["Message"], response["Status"], response["Result"])
+
+    if response["Status"] == 401 or response["Status"] == 404 or response["Status"] == 400:
+        # Rejected authentication (No such user/Blank password/Incorrect password)
+        raise AuthenticationFailure(response["Message"], response["Status"])
 
     # Catch all failure
     return False
