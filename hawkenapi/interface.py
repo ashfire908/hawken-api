@@ -331,12 +331,12 @@ def achievement_reward_batch(session, grant, guids, countrycode=None):
     return data
 
 
-def achievement_user_list(session, grant, guid):
+def achievement_user_list(session, grant, guid, countrycode=None):
     # Validate the guid given
     if not verify_guid(guid):
         raise ValueError("Invalid user GUID given")
 
-    response = session.api_get(endpoints.achievement_user, guid, auth=grant)
+    response = session.api_get(endpoints.achievement_user, guid, auth=grant, countrycode=countrycode)
 
     if response["Status"] == 404:
         if response["Message"] == "User not found":
@@ -350,7 +350,7 @@ def achievement_user_list(session, grant, guid):
     return response["Result"]
 
 
-def achievement_user_batch(session, grant, user, achievements):
+def achievement_user_batch(session, grant, user, achievements, countrycode=None):
     # Validate the guids given
     if not verify_guid(user):
         raise ValueError("Invalid user GUID given")
@@ -360,25 +360,18 @@ def achievement_user_batch(session, grant, user, achievements):
         if not verify_guid(guid):
             raise ValueError("Invalid achievement GUID given")
 
-    data = []
-    # Perform a chunked request
-    for chunk in chunks(achievements, batch_limit):
-        # Retrieve a chunk
-        response = session.api_get(endpoints.achievement_user, user, auth=grant, batch=chunk)
+    response = session.api_post(endpoints.achievement_user_query, user, auth=grant, batch=chunk, countrycode=countrycode)
 
-        if response["Status"] == 404:
-            if response["Message"] == "Error retrieving batch items.":
-                # No such achievement
-                raise InvalidBatch(response["Message"], response["Status"], None)
+    if response["Status"] == 404:
+        if response["Message"] == "Error retrieving batch items.":
+            # No such achievement
+            raise InvalidBatch(response["Message"], response["Status"], None)
 
-            # No such user
-            return None
+        # No such user
+        return None
 
-        # Add the response to the data set
-        data.extend(response["Result"])
-
-    # Return data set
-    return data
+    # Return response
+    return response["Result"]
 
 
 def achievement_user_unlock(session, grant, user, achievement):

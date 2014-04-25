@@ -171,16 +171,16 @@ class Client:
 
     @require_auth
     @GuidList("user_achievements_list", expiry="stats")
-    def get_user_achievements_list(self, user):
-        return achievement_user_list(self.session, self.grant, user)
+    def get_user_achievements_list(self, user, countrycode=None):
+        return achievement_user_list(self.session, self.grant, user, countrycode=countrycode)
 
     @require_auth
     @BatchItem("user_achievements", "AchievementGuid", expiry="stats")
-    def get_user_achievements(self, user, achievement):
+    def get_user_achievements(self, user, achievement, countrycode=None):
         if isinstance(achievement, str):
             # Emulate a single-type request
             try:
-                data = achievement_user_batch(self.session, self.grant, user, [achievement])
+                data = achievement_user_batch(self.session, self.grant, user, [achievement], countrycode=countrycode)
             except InvalidBatch:
                 return None
 
@@ -189,7 +189,7 @@ class Client:
 
             return data
 
-        return achievement_user_batch(self.session, self.grant, user, achievement)
+        return achievement_user_batch(self.session, self.grant, user, achievement, countrycode=countrycode)
 
     @require_auth
     @nocache
