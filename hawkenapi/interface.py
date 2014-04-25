@@ -26,7 +26,8 @@ __all__ = ["Session", "auth", "deauth", "achievement_list", "achievement_batch",
            "user_game_settings_create", "user_game_settings_update", "user_game_settings_delete", "user_guid",
            "user_items", "user_items_batch", "user_items_broker", "user_items_stats", "user_items_stats_single",
            "user_meteor_settings", "user_publicdata_single", "user_server", "user_stats_single", "user_stats_batch",
-           "version", "voice_access", "voice_info", "voice_lookup", "voice_user", "voice_channel"]
+           "version", "voice_access", "voice_info", "voice_lookup", "voice_user", "voice_channel", "bundle_list",
+           "bundle_single", "bundle_batch"]
 
 batch_limit = 200
 
@@ -416,6 +417,46 @@ def antiaddiction(session, grant, guid):
 
     # Return response
     return response["Result"]
+
+
+def bundle_list(session, grant):
+    response = session.api_get(endpoints.bundle, auth=grant)
+
+    # Return response
+    return response["Result"]
+
+
+def bundle_single(session, grant, guid):
+    # Validate the guid given
+    if not verify_guid(guid):
+        raise ValueError("Invalid bundle GUID given")
+
+    response = session.api_get(endpoints.bundle_single, guid, auth=grant)
+
+    if response["Status"] == 404:
+        # No such bundle
+        return None
+
+    # Return response
+    return response["Result"]
+
+
+def bundle_batch(session, grant, guids):
+    # Validate the guids given
+    if len(guids) == 0:
+        raise ValueError("List of bundle GUIDs cannot be empty")
+    for guid in guids:
+        if not verify_guid(guid):
+            raise ValueError("Invalid bundle GUID given")
+
+    data = []
+    # Perform a chunked request
+    for chunk in chunks(guids, batch_limit):
+        # Retrieve a chunk and add the response to the data set
+        data.extend(session.api_get(endpoints.bundle, auth=grant, batch=chunk)["Result"])
+
+    # Return data set
+    return data
 
 
 def clan_list(session, grant, tag=None, name=None):

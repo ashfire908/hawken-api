@@ -202,6 +202,19 @@ class Client:
         return antiaddiction(self.session, self.grant, user)
 
     @require_auth
+    @GuidList("bundles_list", expiry="game")
+    def get_bundle_list(self):
+        return bundle_list(self.session, self.grant)
+
+    @require_auth
+    @BatchItem("bundles", "Guid", expiry="game")
+    def get_bundle(self, bundle):
+        if isinstance(bundle, str):
+            return bundle_single(self.session, self.grant, bundle)
+
+        return bundle_batch(self.session, self.grant, bundle)
+
+    @require_auth
     @GuidList("clans_list", expiry="clan")
     def get_clan_list(self, tag=None, name=None):
         return clan_list(self.session, self.grant, tag=tag, name=name)
