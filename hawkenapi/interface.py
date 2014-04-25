@@ -360,7 +360,7 @@ def achievement_user_batch(session, grant, user, achievements, countrycode=None)
         if not verify_guid(guid):
             raise ValueError("Invalid achievement GUID given")
 
-    response = session.api_post(endpoints.achievement_user_query, user, auth=grant, batch=chunk, countrycode=countrycode)
+    response = session.api_post(endpoints.achievement_user_query, user, auth=grant, batch=achievements, countrycode=countrycode)
 
     if response["Status"] == 404:
         if response["Message"] == "Error retrieving batch items.":
@@ -522,21 +522,14 @@ def game_items_batch(session, grant, guids):
         if not verify_guid(guid):
             raise ValueError("Invalid item GUID given")
 
-    data = []
-    # Perform a chunked request
-    for chunk in chunks(guids, batch_limit):
-        # Retrieve a chunk
-        response = session.api_post(endpoints.item_batch, auth=grant, batch=chunk)
+    response = session.api_post(endpoints.item_batch, auth=grant, batch=guids)
 
-        if response["Status"] == 404:
-            # No such item
-            raise InvalidBatch(response["Message"], response["Status"], None)
+    if response["Status"] == 404:
+        # No such item
+        raise InvalidBatch(response["Message"], response["Status"], None)
 
-        # Add the response to the data set
-        data.extend(response["Result"])
-
-    # Return data set
-    return data
+    # Return response
+    return response["Result"]
 
 
 def game_offers_list(session, grant):
@@ -569,21 +562,14 @@ def game_offers_batch(session, grant, guids):
         if not verify_guid(guid):
             raise ValueError("Invalid offer GUID given")
 
-    data = []
-    # Perform a chunked request
-    for chunk in chunks(guids, batch_limit):
-        # Retrieve a chunk
-        response = session.api_post(endpoints.offer_batch, auth=grant, batch=chunk)
+    response = session.api_post(endpoints.offer_batch, auth=grant, batch=guids)
 
-        if response["Status"] == 404:
-            # No such offer
-            raise InvalidBatch(response["Message"], response["Status"], None)
+    if response["Status"] == 404:
+        # No such offer
+        raise InvalidBatch(response["Message"], response["Status"], None)
 
-        # Add the response to the data set
-        data.extend(response["Result"])
-
-    # Return data set
-    return data
+    # Return response
+    return response["Result"]
 
 
 def game_offers_redeem(session, grant, user, offer, currency, transaction, parent=None):
@@ -1178,25 +1164,18 @@ def user_items_batch(session, grant, user, items):
         if not verify_guid(guid):
             raise ValueError("Invalid item instance GUID given")
 
-    data = []
-    # Perform a chunked request
-    for chunk in chunks(items, batch_limit):
-        # Retrieve a chunk
-        response = session.api_post(endpoints.user_item_batch, user, auth=grant, batch=chunk)
+    response = session.api_post(endpoints.user_item_batch, user, auth=grant, batch=items)
 
-        if response["Status"] == 404:
-            if response["Message"] == "Error retrieving batch user game items. If any item doesn't exist the batch will fail.":
-                # No such achievement
-                raise InvalidBatch(response["Message"], response["Status"], None)
+    if response["Status"] == 404:
+        if response["Message"] == "Error retrieving batch user game items. If any item doesn't exist the batch will fail.":
+            # No such achievement
+            raise InvalidBatch(response["Message"], response["Status"], None)
 
-            # No such user
-            return None
+        # No such user
+        return None
 
-        # Add the response to the data set
-        data.extend(response["Result"])
-
-    # Return data set
-    return data
+    # Return response
+    return response["Result"]
 
 
 def user_items_broker(session, grant, user, instance, data):
