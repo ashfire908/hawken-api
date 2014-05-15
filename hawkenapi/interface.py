@@ -650,6 +650,10 @@ def game_offers_redeem(session, grant, user, offer, currency, transaction, paren
         # No such offer
         return None
 
+    if response["Status"] == 403:
+        # Offer is disabled
+        raise InvalidRequest(response["Message"], response["Status"])
+
     if response["Status"] == 412:
         # Not enough currency
         raise InsufficientFunds(response["Message"], response["Status"])
