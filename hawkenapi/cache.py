@@ -98,12 +98,15 @@ class Cache(metaclass=ABCMeta):
 
 
 class RedisCache(Cache):
-    def __init__(self, prefix, lock_timeout=30, lock_poll=0.1, **kwargs):
+    def __init__(self, prefix, lock_timeout=30, lock_poll=0.1, url=None, **kwargs):
         super().__init__(prefix, lock_timeout=lock_timeout, lock_poll=lock_poll)
 
         # Import redis and setup the client
         import redis
-        self.r = redis.StrictRedis(**kwargs)
+        if url is not None:
+            self.r = redis.StrictRedis.from_url(url, **kwargs)
+        else:
+            self.r = redis.StrictRedis(**kwargs)
 
     def get(self, key):
         # Retrieve key from cache
