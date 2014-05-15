@@ -216,8 +216,6 @@ class GuidList:
                 # No cache registered
                 return f(client, *args, **kwargs)
 
-            expiry = expires or client.cache.get_expiry(self.expiry_class)
-
             # Get the cache key
             ckey = client.cache.format_key(self.identifier, *args, **kwargs)
 
