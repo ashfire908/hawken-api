@@ -1,20 +1,11 @@
 # -*- coding: utf-8 -*-
 # Caching interface
 
-import msgpack
 from abc import ABCMeta, abstractmethod
 from functools import wraps
 from inspect import signature
 from itertools import count
 from hawkenapi.util import copyappend
-
-
-def encode(data):
-    return msgpack.packb(data)
-
-
-def decode(data):
-    return msgpack.unpackb(data, encoding="utf-8")
 
 
 def cache_args(f, *args, **kwargs):
@@ -108,12 +99,22 @@ class RedisCache(Cache):
     def __init__(self, prefix, lock_timeout=30, lock_poll=0.1, url=None, **kwargs):
         super().__init__(prefix, lock_timeout=lock_timeout, lock_poll=lock_poll)
 
+        # Import msgpack and save it
+        import msgpack
+        self.pck = msgpack
+
         # Import redis and setup the client
         import redis
         if url is not None:
             self.r = redis.StrictRedis.from_url(url, **kwargs)
         else:
             self.r = redis.StrictRedis(**kwargs)
+
+    def encode(self, data):
+        return self.pck.packb(data)
+
+    def decode(self, data):
+        return self.pck.unpackb(data, encoding="utf-8")
 
     def get(self, key):
         # Retrieve key from cache
@@ -123,7 +124,7 @@ class RedisCache(Cache):
             return cache
 
         # Decode key
-        return decode(cache)
+        return self.decode(cache)
 
     def get_multiple(self, keys):
         # Retrieve keys from cache
@@ -133,7 +134,7 @@ class RedisCache(Cache):
                 yield value
             else:
                 # Decode key
-                yield decode(value)
+                yield self.decode(value)
 
     def get_field(self, key, field):
         # Retrieve field from cache
@@ -143,7 +144,7 @@ class RedisCache(Cache):
             return cache
 
         # Decode field
-        return decode(cache)
+        return self.decode(cache)
 
     def get_field_multiple(self, key, fields):
         # Retrieve the fields
@@ -153,7 +154,7 @@ class RedisCache(Cache):
                 yield value
             else:
                 # Decode field
-                yield decode(value)
+                yield self.decode(value)
 
     def get_field_values(self, key):
         # Check if the field exists
@@ -162,18 +163,18 @@ class RedisCache(Cache):
             return None
 
         # Retrieve values from cache and decode
-        return [decode(value) for value in self.r.hvals(key)]
+        return [self.decode(value) for value in self.r.hvals(key)]
 
     def set(self, key, value, expires):
         # Set the key value and expiry
-        self.r.setex(key, expires, encode(value))
+        self.r.setex(key, expires, self.encode(value))
 
     def set_multiple(self, values, expires):
         # Create a pipeline
         pipe = self.r.pipeline()
 
         # Set the key values
-        pipe.mset({k: encode(v) for k, v in values.items()})
+        pipe.mset({k: self.encode(v) for k, v in values.items()})
 
         # Set the key expiry
         for k in values.keys():
@@ -190,7 +191,7 @@ class RedisCache(Cache):
         pipe.delete(key)
 
         # Set the hash values
-        pipe.hmset(key, {k: encode(v) for k, v in values.items()})
+        pipe.hmset(key, {k: self.encode(v) for k, v in values.items()})
 
         # Set the hash expiry
         pipe.expire(key, expires)

@@ -9,9 +9,9 @@ setup(name="hawkenapi",
       author="Andrew Hampe",
       author_email="andrew.hampe@gmail.com",
       packages=["hawkenapi", "hawkenapi.sleekxmpp"],
-      install_requires=["requests", "enum34", "msgpack-python"],
+      install_requires=["requests", "enum34"],
       extras_require={
-          "RedisCache": ["redis"],
+          "RedisCache": ["msgpack-python", "redis"],
           "XMPP": ["sleekxmpp"]
       },
       classifiers=(
