@@ -3,6 +3,7 @@
 
 import msgpack
 from abc import ABCMeta, abstractmethod
+from functools import wraps
 from itertools import count
 from hawkenapi.util import copyappend
 
@@ -196,6 +197,7 @@ class RedisCache(Cache):
 
 
 def nocache(f):
+    @wraps(f)
     def wrap(*args, **kwargs):
         kwargs.pop("cache_skip", None)
         kwargs.pop("cache_bypass", None)
@@ -211,6 +213,7 @@ class GuidList:
         self.expiry_class = expiry
 
     def __call__(self, f):
+        @wraps(f)
         def wrap(client, *args, **kwargs):
             skip = kwargs.pop("cache_skip", False)
             bypass = kwargs.pop("cache_bypass", False)
@@ -257,6 +260,7 @@ class ItemList:
         self.expiry_class = expiry
 
     def __call__(self, f):
+        @wraps(f)
         def wrap(client, *args, **kwargs):
             skip = kwargs.pop("cache_skip", False)
             bypass = kwargs.pop("cache_bypass", False)
@@ -303,6 +307,7 @@ class SingleItem:
         self.expiry_class = expiry
 
     def __call__(self, f):
+        @wraps(f)
         def wrap(client, *args, **kwargs):
             skip = kwargs.pop("cache_skip", False)
             bypass = kwargs.pop("cache_bypass", False)
@@ -358,6 +363,7 @@ class BatchItem:
         self.expiry_class = expiry
 
     def __call__(self, f):
+        @wraps(f)
         def wrap(client, *args, **kwargs):
             skip = kwargs.pop("cache_skip", False)
             bypass = kwargs.pop("cache_bypass", False)

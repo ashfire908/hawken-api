@@ -2,6 +2,7 @@
 # High-level API Client
 
 from datetime import datetime
+from functools import wraps
 import logging
 from hawkenapi.cache import nocache, GuidList, ItemList, SingleItem, BatchItem
 from hawkenapi.interface import *
@@ -17,6 +18,7 @@ logger = logging.getLogger(__name__)
 
 # Decorators
 def require_auth(f):
+    @wraps(f)
     def auth_handler(self, *args, **kwargs):
         reauthed = False
 
