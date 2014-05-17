@@ -1,4 +1,6 @@
 # -*- coding: utf-8 -*-
+# Hawken XMPP support
+# Copyright (c) 2013-2014 Andrew Hampe
 
 from sleekxmpp import Message
 from sleekxmpp.plugins.base import base_plugin

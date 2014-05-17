@@ -1,4 +1,6 @@
 # -*- coding: utf-8 -*-
+# Hawken XMPP stanzas
+# Copyright (c) 2013-2014 Andrew Hampe
 
 from enum import Enum
 from sleekxmpp.xmlstream.stanzabase import ElementBase

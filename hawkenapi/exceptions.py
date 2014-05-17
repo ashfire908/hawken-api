@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
-# API Exceptions
+# API exceptions
+# Copyright (c) 2013-2014 Andrew Hampe
 
 import re
 from enum import Enum

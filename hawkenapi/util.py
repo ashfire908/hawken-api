@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 # Utilities
+# Copyright (c) 2013-2014 Andrew Hampe
 
 import re
 import base64

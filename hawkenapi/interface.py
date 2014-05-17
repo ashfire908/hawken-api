@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
-# Low-level API Interface
+# Low-level API interface
+# Copyright (c) 2013-2014 Andrew Hampe
 
 import requests
 from requests.auth import AuthBase

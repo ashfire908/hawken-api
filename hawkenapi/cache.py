@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 # Caching interface
+# Copyright (c) 2013-2014 Andrew Hampe
 
 from abc import ABCMeta, abstractmethod
 from functools import wraps
