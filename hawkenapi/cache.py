@@ -4,6 +4,7 @@
 import msgpack
 from abc import ABCMeta, abstractmethod
 from functools import wraps
+from inspect import signature
 from itertools import count
 from hawkenapi.util import copyappend
 
@@ -14,6 +15,11 @@ def encode(data):
 
 def decode(data):
     return msgpack.unpackb(data, encoding="utf-8")
+
+
+def cache_args(f, *args, **kwargs):
+    bound = signature(f).bind(*args, **kwargs)
+    return bound.args[1:], bound.kwargs
 
 
 class Expiry:
@@ -222,6 +228,9 @@ class GuidList:
                 # No cache registered
                 return f(client, *args, **kwargs)
 
+            # Update the positional args and verify the args work for the wrapped function
+            args, kwargs = cache_args(f, client, *args, **kwargs)
+
             # Get the cache key
             ckey = client.cache.format_key(self.identifier, *args, **kwargs)
 
@@ -269,6 +278,9 @@ class ItemList:
                 # No cache registered
                 return f(client, *args, **kwargs)
 
+            # Update the positional args and verify the args work for the wrapped function
+            args, kwargs = cache_args(f, client, *args, **kwargs)
+
             # Get the cache key
             ckey = client.cache.format_key(self.identifier, *args, **kwargs)
 
@@ -315,6 +327,9 @@ class SingleItem:
             if skip or client.cache is None:
                 # No cache registered
                 return f(client, *args, **kwargs)
+
+            # Update the positional args and verify the args work for the wrapped function
+            args, kwargs = cache_args(f, client, *args, **kwargs)
 
             # Get the cache key
             ckey = client.cache.format_key(self.identifier, *args, **kwargs)
@@ -371,6 +386,9 @@ class BatchItem:
             if skip or client.cache is None:
                 # No cache registered
                 return f(client, *args, **kwargs)
+
+            # Update the positional args and verify the args work for the wrapped function
+            args, kwargs = cache_args(f, client, *args, **kwargs)
 
             # Get the arguments
             kargs = list(args)
