@@ -1359,7 +1359,8 @@ def user_stats_batch(session, grant, guids):
 
     data = []
     # Perform a chunked request
-    for chunk in chunks(guids, batch_limit):
+    # BUG: API breaks at anything more than 100 users at a time
+    for chunk in chunks(guids, 100):
         # Retrieve a chunk and add the response to the data set
         data.extend(session.api_get(endpoints.user_stat_batch, auth=grant, batch=chunk)["Result"])
 
