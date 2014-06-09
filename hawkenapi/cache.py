@@ -8,6 +8,15 @@ from inspect import signature
 from itertools import count
 from hawkenapi.util import copyappend
 
+try:
+    import msgpack
+    import redis
+    from redis.exceptions import WatchError
+except ImportError as e:
+    _failedload = (True, e)
+else:
+    _failedload = (False, )
+
 
 def cache_args(f, *args, **kwargs):
     bound = signature(f).bind(*args, **kwargs)
@@ -29,12 +38,23 @@ class Expiry:
         return getattr(self, eclass, self.default)
 
 
-class Cache(metaclass=ABCMeta):
-    def __init__(self, prefix, lock_timeout=30, lock_poll=0.1):
+class Cache:
+    def __init__(self, prefix, expiry=None, url=None, **kwargs):
         self.prefix = prefix
-        self.lock_timeout = lock_timeout
-        self.lock_poll = lock_poll
-        self.expiry = Expiry()
+        if expiry is not None:
+            self.expiry = expiry
+        else:
+            self.expiry = Expiry()
+
+        # Check if we successfully imported our deps
+        if _failedload[0]:
+            raise _failedload[1]
+
+        # Setup the client
+        if url is not None:
+            self.redis = redis.StrictRedis.from_url(url, **kwargs)
+        else:
+            self.redis = redis.StrictRedis(**kwargs)
 
     def format_key(self, identifier, *args, **kwargs):
         # Format: prefix:identifier:arg1.arg2#key=value|key=value
@@ -52,156 +72,16 @@ class Cache(metaclass=ABCMeta):
 
         return key.lower()
 
-    def format_lock_key(self, identifier, *args, **kwargs):
-        # Format: lock$prefix:identifier:arg1.arg2#key=value|key=value
-        return "lock$" + self.format_key(identifier, *args, **kwargs)
-
     def get_expiry(self, eclass):
         return self.expiry.get_class(eclass)
 
-    @abstractmethod
-    def get(self, key):
-        pass
-
-    @abstractmethod
-    def get_multiple(self, keys):
-        pass
-
-    @abstractmethod
-    def get_field(self, key, field):
-        pass
-
-    @abstractmethod
-    def get_field_multiple(self, key, fields):
-        pass
-
-    @abstractmethod
-    def get_field_values(self, key):
-        pass
-
-    @abstractmethod
-    def set(self, key, value, expires):
-        pass
-
-    @abstractmethod
-    def set_multiple(self, values, expires):
-        pass
-
-    @abstractmethod
-    def set_field(self, key, values, expires):
-        pass
-
-    @abstractmethod
-    def lock(self, key):
-        pass
-
-
-class RedisCache(Cache):
-    def __init__(self, prefix, lock_timeout=30, lock_poll=0.1, url=None, **kwargs):
-        super().__init__(prefix, lock_timeout=lock_timeout, lock_poll=lock_poll)
-
-        # Import msgpack and save it
-        import msgpack
-        self.pck = msgpack
-
-        # Import redis and setup the client
-        import redis
-        if url is not None:
-            self.r = redis.StrictRedis.from_url(url, **kwargs)
-        else:
-            self.r = redis.StrictRedis(**kwargs)
-
     def encode(self, data):
-        return self.pck.packb(data)
+        return msgpack.packb(data)
 
     def decode(self, data):
-        return self.pck.unpackb(data, encoding="utf-8")
-
-    def get(self, key):
-        # Retrieve key from cache
-        cache = self.r.get(key)
-        if not cache:
-            # Cache miss
-            return cache
-
-        # Decode key
-        return self.decode(cache)
-
-    def get_multiple(self, keys):
-        # Retrieve keys from cache
-        for value in self.r.mget(keys):
-            if value is None:
-                # Cache miss
-                yield value
-            else:
-                # Decode key
-                yield self.decode(value)
-
-    def get_field(self, key, field):
-        # Retrieve field from cache
-        cache = self.r.hget(key, field)
-        if not cache:
-            # Cache miss
-            return cache
-
-        # Decode field
-        return self.decode(cache)
-
-    def get_field_multiple(self, key, fields):
-        # Retrieve the fields
-        for value in self.r.hmget(key, fields):
-            if value is None:
-                # Cache miss
-                yield value
-            else:
-                # Decode field
-                yield self.decode(value)
-
-    def get_field_values(self, key):
-        # Check if the field exists
-        if not self.r.exists(key):
-            # Cache miss
-            return None
-
-        # Retrieve values from cache and decode
-        return [self.decode(value) for value in self.r.hvals(key)]
-
-    def set(self, key, value, expires):
-        # Set the key value and expiry
-        self.r.setex(key, expires, self.encode(value))
-
-    def set_multiple(self, values, expires):
-        # Create a pipeline
-        pipe = self.r.pipeline()
-
-        # Set the key values
-        pipe.mset({k: self.encode(v) for k, v in values.items()})
-
-        # Set the key expiry
-        for k in values.keys():
-            pipe.expire(k, expires)
-
-        # Execute the pipelined requests
-        pipe.execute()
-
-    def set_field(self, key, values, expires):
-        # Create a pipeline
-        pipe = self.r.pipeline()
-
-        # Delete the old hash
-        pipe.delete(key)
-
-        # Set the hash values
-        pipe.hmset(key, {k: self.encode(v) for k, v in values.items()})
-
-        # Set the hash expiry
-        pipe.expire(key, expires)
-
-        # Execute the pipelined requests
-        pipe.execute()
-
-    def lock(self, key):
-        return self.r.lock(key, timeout=self.lock_timeout, sleep=self.lock_poll)
+        if not data:
+            return data
+        return msgpack.unpackb(data, encoding="utf-8")
 
 
 def nocache(f):
@@ -209,7 +89,6 @@ def nocache(f):
     def wrap(*args, **kwargs):
         kwargs.pop("cache_skip", None)
         kwargs.pop("cache_bypass", None)
-        kwargs.pop("cache_expires", None)
 
         return f(*args, **kwargs)
     return wrap
@@ -225,46 +104,175 @@ class GuidList:
         def wrap(client, *args, **kwargs):
             skip = kwargs.pop("cache_skip", False)
             bypass = kwargs.pop("cache_bypass", False)
-            expires = kwargs.pop("cache_expires", None)
-            if skip or client.cache is None:
+            cache = client.cache
+            if skip or cache is None:
                 # No cache registered
                 return f(client, *args, **kwargs)
+            expires = cache.get_expiry(self.expiry_class)
+            r = cache.redis
 
             # Update the positional args and verify the args work for the wrapped function
             args, kwargs = cache_args(f, client, *args, **kwargs)
 
             # Get the cache key
-            ckey = client.cache.format_key(self.identifier, *args, **kwargs)
+            ckey = cache.format_key(self.identifier, *args, **kwargs)
 
-            if not bypass:
-                # Check the cache
-                cache = client.cache.get(ckey)
-                if cache:
-                    # Returned cached data
-                    return cache
+            # Open a pipeline
+            with r.pipeline() as pipe:
+                try:
+                    # Watch the key
+                    pipe.watch(ckey)
 
-            # Acquire a lock
-            with client.cache.lock(client.cache.format_lock_key(self.identifier, *args, **kwargs)):
-                if not bypass:
-                    # Verify the cache is still empty
-                    cache = client.cache.get(ckey)
-                    if cache:
+                    # Check the cache
+                    data = cache.decode(pipe.get(ckey))
+                    if data:
                         # Returned cached data
-                        return cache
+                        return data
 
-                # Perform the wrapped request
-                response = f(client, *args, **kwargs)
+                    # Perform the wrapped request
+                    response = f(client, *args, **kwargs)
 
-                if response:
-                    # Cache the result
-                    client.cache.set(ckey, response, expires or client.cache.get_expiry(self.expiry_class))
+                    if response:
+                        # Cache the result
+                        pipe.multi()
+                        pipe.setex(key, expires, cache.encode(response))
+                        pipe.execute()
+                except WatchError:
+                    # Ignore it and just return the result
+                    pass
 
-                return response
+            return response
 
         return wrap
 
 
 class ItemList:
+    def __init__(self, list_identifier, identifier, key, expiry=None):
+        self.list_identifier = list_identifier
+        self.identifier = identifier
+        self.key = key
+        self.expiry_class = expiry
+
+    def __call__(self, f):
+        @wraps(f)
+        def wrap(client, *args, **kwargs):
+            skip = kwargs.pop("cache_skip", False)
+            bypass = kwargs.pop("cache_bypass", False)
+            cache = client.cache
+            if skip or cache is None:
+                # No cache registered
+                return f(client, *args, **kwargs)
+            expires = cache.get_expiry(self.expiry_class)
+            r = cache.redis
+
+            # Update the positional args and verify the args work for the wrapped function
+            args, kwargs = cache_args(f, client, *args, **kwargs)
+
+            # Get the list key
+            lkey = cache.format_key(self.list_identifier, *args, **kwargs)
+
+            # Open a pipeline
+            with r.pipeline() as pipe:
+                try:
+                    # Watch the key
+                    pipe.watch(lkey)
+
+                    # Check the cache
+                    cache_list = [v.decode() for v in pipe.smembers(lkey)]
+                    if cache_list:
+                        # Load cached data
+                        ckeys = [cache.format_key(self.identifier, *copyappend(args, key), **kwargs) for key in cache_list]
+                        data = [cache.decode(v) for v in pipe.mget(ckeys) if v is not None]
+                        # Check if all the keys are intact
+                        if len(ckeys) == len(data):
+                            # Return the cached data
+                            return data
+
+                    # Perform the wrapped request
+                    response = f(client, *args, **kwargs)
+
+                    if response:
+                        # Build the keys list and data dict
+                        keys = []
+                        data = {}
+                        for value in response:
+                            keys.append(value[self.key])
+                            data[cache.format_key(self.identifier, *copyappend(args, value[self.key]), **kwargs)] = cache.encode(value)
+
+                        # Cache the result
+                        pipe.multi()
+
+                        # Update the set
+                        pipe.delete(lkey)
+                        pipe.sadd(lkey, *keys)
+
+                        # Set the data
+                        for k, v in data.items():
+                            pipe.setex(k, expires, v)
+
+                        pipe.execute()
+                except WatchError:
+                    # Ignore it and just return the result
+                    pass
+
+            return response
+
+        return wrap
+
+
+class SingleItem:
+    def __init__(self, identifier, expiry=None):
+        self.identifier = identifier
+        self.expiry_class = expiry
+
+    def __call__(self, f):
+        @wraps(f)
+        def wrap(client, *args, **kwargs):
+            skip = kwargs.pop("cache_skip", False)
+            bypass = kwargs.pop("cache_bypass", False)
+            cache = client.cache
+            if skip or cache is None:
+                # No cache registered
+                return f(client, *args, **kwargs)
+            expires = cache.get_expiry(self.expiry_class)
+            r = cache.redis
+
+            # Update the positional args and verify the args work for the wrapped function
+            args, kwargs = cache_args(f, client, *args, **kwargs)
+
+            # Get the cache key
+            ckey = cache.format_key(self.identifier, *args, **kwargs)
+
+            # Open a pipeline
+            with r.pipeline() as pipe:
+                try:
+                    # Watch the key
+                    pipe.watch(ckey)
+
+                    # Check the cache
+                    data = cache.decode(pipe.get(ckey))
+                    if data:
+                        # Returned cached data
+                        return data
+
+                    # Perform the wrapped request
+                    response = f(client, *args, **kwargs)
+
+                    if response:
+                        # Cache the result
+                        pipe.multi()
+                        pipe.setex(ckey, expires, cache.encode(response))
+                        pipe.execute()
+                except WatchError:
+                    # Ignore it and just return the result
+                    pass
+
+            return response
+
+        return wrap
+
+
+class BatchItem:
     def __init__(self, identifier, key, expiry=None):
         self.identifier = identifier
         self.key = key
@@ -275,253 +283,96 @@ class ItemList:
         def wrap(client, *args, **kwargs):
             skip = kwargs.pop("cache_skip", False)
             bypass = kwargs.pop("cache_bypass", False)
-            expires = kwargs.pop("cache_expires", None)
-            if skip or client.cache is None:
+            cache = client.cache
+            if skip or cache is None:
                 # No cache registered
                 return f(client, *args, **kwargs)
-
-            # Update the positional args and verify the args work for the wrapped function
-            args, kwargs = cache_args(f, client, *args, **kwargs)
-
-            # Get the cache key
-            ckey = client.cache.format_key(self.identifier, *args, **kwargs)
-
-            if not bypass:
-                # Check the cache
-                cache = client.cache.get_field_values(ckey)
-                if cache:
-                    # Returned cached data
-                    return cache
-
-            # Acquire a lock
-            with client.cache.lock(client.cache.format_lock_key(self.identifier, *args, **kwargs)):
-                if not bypass:
-                    # Verify the cache is still empty
-                    cache = client.cache.get_field_values(ckey)
-                    if cache:
-                        # Returned cached data
-                        return cache
-
-                # Perform the wrapped request
-                response = f(client, *args, **kwargs)
-
-                if response:
-                    # Cache the result
-                    client.cache.set_field(ckey, {v[self.key]: v for v in response}, expires or client.cache.get_expiry(self.expiry_class))
-
-                return response
-
-        return wrap
-
-
-class SingleItem:
-    def __init__(self, identifier, listid=None, expiry=None):
-        self.identifier = identifier
-        self.listid = listid
-        self.expiry_class = expiry
-
-    def __call__(self, f):
-        @wraps(f)
-        def wrap(client, *args, **kwargs):
-            skip = kwargs.pop("cache_skip", False)
-            bypass = kwargs.pop("cache_bypass", False)
-            expires = kwargs.pop("cache_expires", None)
-            if skip or client.cache is None:
-                # No cache registered
-                return f(client, *args, **kwargs)
-
-            # Update the positional args and verify the args work for the wrapped function
-            args, kwargs = cache_args(f, client, *args, **kwargs)
-
-            # Get the cache key
-            ckey = client.cache.format_key(self.identifier, *args, **kwargs)
-
-            if not bypass:
-                # Check the cache by key
-                cache = client.cache.get(ckey)
-                if cache:
-                    # Return the cached data
-                    return cache
-
-                if self.listid:
-                    # Check the cache for the associated item list
-                    lkey = client.cache.format_key(self.listid, *args[:-1])
-                    cache = client.cache.get_field(lkey, args[-1])
-                    if cache:
-                        # Return the cached data
-                        return cache
-
-            # Acquire a lock
-            with client.cache.lock(client.cache.format_lock_key(self.identifier, *args, **kwargs)):
-                if not bypass:
-                    # Verify the cache is still empty
-                    cache = client.cache.get(ckey)
-                    if cache:
-                        # Return the cached data
-                        return cache
-
-                # Perform the wrapped request
-                response = f(client, *args, **kwargs)
-
-                if response:
-                    # Cache the result
-                    client.cache.set(ckey, response, expires or client.cache.get_expiry(self.expiry_class))
-
-                return response
-
-        return wrap
-
-
-class BatchItem:
-    def __init__(self, identifier, key, listid=None, expiry=None):
-        self.identifier = identifier
-        self.key = key
-        self.listid = listid
-        self.expiry_class = expiry
-
-    def __call__(self, f):
-        @wraps(f)
-        def wrap(client, *args, **kwargs):
-            skip = kwargs.pop("cache_skip", False)
-            bypass = kwargs.pop("cache_bypass", False)
-            expires = kwargs.pop("cache_expires", None)
-            if skip or client.cache is None:
-                # No cache registered
-                return f(client, *args, **kwargs)
+            expires = cache.get_expiry(self.expiry_class)
+            r = cache.redis
 
             # Update the positional args and verify the args work for the wrapped function
             args, kwargs = cache_args(f, client, *args, **kwargs)
 
             # Get the arguments
-            kargs = list(args)
-            items = kargs.pop()
+            *kargs, items = list(args)
 
             # Check if we have a single item
             if isinstance(items, str):
                 # Get the cache key
-                ckey = client.cache.format_key(self.identifier, *args, **kwargs)
+                ckey = cache.format_key(self.identifier, *args, **kwargs)
 
-                if not bypass:
-                    # Check the cache by key
-                    cache = client.cache.get(ckey)
-                    if cache:
-                        # Return the cached data
-                        return cache
+                # Open a pipeline
+                with r.pipeline() as pipe:
+                    try:
+                        # Watch the key
+                        pipe.watch(ckey)
 
-                    if self.listid:
-                        # Check the cache for the associated item list
-                        cache = client.cache.get_field(client.cache.format_key(self.listid, *kargs), items)
-                        if cache:
-                            # Return the cached data
-                            return cache
+                        # Check the cache
+                        data = cache.decode(pipe.get(ckey))
+                        if data:
+                            # Returned cached data
+                            return data
 
-                # Acquire a lock
-                with client.cache.lock(client.cache.format_lock_key(self.identifier, *args, **kwargs)):
+                        # Perform the wrapped request
+                        response = f(client, *args, **kwargs)
+
+                        if response:
+                            # Cache the result
+                            pipe.multi()
+                            pipe.setex(ckey, expires, cache.encode(response))
+                            pipe.execute()
+                    except WatchError:
+                        # Ignore it and just return the result
+                        pass
+
+                return response
+
+            # Get the cache keys
+            ckeys = [cache.format_key(self.identifier, *copyappend(kargs, item), **kwargs) for item in items]
+
+            # Perform a full batched lookup
+            with r.pipeline() as pipe:
+                try:
+                    # Watch the keys
+                    pipe.watch(ckeys)
+
                     if not bypass:
-                        # Verify the cache is still empty
-                        cache = client.cache.get(ckey)
-                        if cache:
-                            # Return the cached data
-                            return cache
+                        data = []
+                        misses = []
+                        # Check the cache by key
+                        for key, value in zip(items, pipe.mget(ckeys)):
+                            if value is None:
+                                misses.append(key)
+                            else:
+                                data.append(value)
 
-                    # Perform the wrapped request
-                    response = f(client, *args, **kwargs)
+                        # Check for any cache misses
+                        if len(misses) == 0:
+                            # Return cached data
+                            return data
+
+                        # Perform the wrapped request
+                        response = f(client, *copyappend(kargs, misses), **kwargs)
+                    else:
+                        # Perform the wrapped request
+                        response = f(client, *copyappend(kargs, items), **kwargs)
 
                     if response:
                         # Cache the result
-                        client.cache.set(ckey, response, expires or client.cache.get_expiry(self.expiry_class))
+                        pipe.multi()
+                        for v in response:
+                            pipe.setex(cache.format_key(self.identifier, *copyappend(kargs, v[self.key]), **kwargs), expires, cache.encode(v))
+                        pipe.execute()
+                except WatchError:
+                    # Only populate the keys that are missing
+                    with r.pipeline() as pipe:
+                        for v in response:
+                            pipe.set(cache.format_key(self.identifier, *copyappend(kargs, v[self.key]), **kwargs), cache.encode(v), ex=expires, nx=True)
+                        pipe.execute()
 
-                    return response
-
-            # Perform a full batched lookup
-            if not bypass:
-                data = []
-                misses = []
-                miss_index = []
-                # Check the cache by key
-                ckeys = [client.cache.format_key(self.identifier, *copyappend(kargs, item), **kwargs) for item in items]
-                for i, key, cache in zip(count(), items, client.cache.get_multiple(ckeys)):
-                    if cache is None:
-                        # Add it to the missed list
-                        misses.append(key)
-                        miss_index.append(i)
-
-                    # Add the cache result to the output - misses are placeholders
-                    data.append(cache)
-
-                # Check for any cache misses
-                if len(misses) == 0:
-                    # Return cached data
-                    return data
-
-                # Check list cache
-                if self.listid:
-                    # Iterate over the misses index and the list cache result
-                    miss = 0
-                    hit = 0
-                    for i, cache in zip(miss_index[:], client.cache.get_field_multiple(client.cache.format_key(self.listid, *kargs, **kwargs), misses)):
-                        if cache is None:
-                            # Increment the misses
-                            miss += 1
-                        else:
-                            # Increment the hits
-                            hit += 1
-
-                            # Save the cache result in place
-                            data[i] = cache
-
-                            # Remove the item from the misses
-                            del misses[i - hit]
-                            del miss_index[miss]
-
-                    # Check for any remaining cache misses
-                    if len(misses) == 0:
-                        # Return cached data
-                        return data
-
-            # Acquire a lock
-            with client.cache.lock(client.cache.format_lock_key(self.identifier, *kargs, **kwargs)):
-                if not bypass:
-                    # Verify the cache is still empty
-                    miss = 0
-                    hit = 0
-                    ckeys = [client.cache.format_key(self.identifier, *copyappend(kargs, miss), **kwargs) for miss in misses]
-                    for i, cache in zip(miss_index[:], client.cache.get_multiple(ckeys)):
-                        if cache is None:
-                            # Increment the misses
-                            miss += 1
-                        else:
-                            # Increment the hits
-                            hit += 1
-
-                            # Save the cache result in place
-                            data[i] = cache
-
-                            # Remove the item from the misses
-                            del misses[i - hit]
-                            del miss_index[miss]
-
-                    # Check for any remaining cache misses
-                    if len(misses) == 0:
-                        # Return cached data
-                        return data
-
-                    # Perform the wrapped request
-                    response = f(client, *copyappend(kargs, misses), **kwargs)
-                else:
-                    # Perform the wrapped request
-                    response = f(client, *copyappend(kargs, items), **kwargs)
-
-                if response:
-                    # Cache the result
-                    cache = {client.cache.format_key(self.identifier, *copyappend(kargs, v[self.key]), **kwargs): v for v in response}
-                    client.cache.set_multiple(cache, expires or client.cache.get_expiry(self.expiry_class))
-
-            # Break out of the lock so we aren't wasting lock time here
             if response and not bypass:
-                # Fill in the remaining data
-                for i, v in zip(miss_index, response):
-                    data[i] = v
+                # Add in the missing data
+                data.extend(response)
 
                 # Return the data
                 return data

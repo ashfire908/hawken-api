@@ -247,12 +247,12 @@ class Client:
         return events_url(self.session)
 
     @require_auth
-    @ItemList("game_items_list", "Guid", expiry="game")
+    @ItemList("game_items_list", "game_items", "Guid", expiry="game")
     def get_game_items_list(self):
         return game_items(self.session, self.grant)
 
     @require_auth
-    @BatchItem("game_items", "Guid", listid="game_items_list", expiry="game")
+    @BatchItem("game_items", "Guid", expiry="game")
     def get_game_items(self, item):
         if isinstance(item, str):
             return game_items_single(self.session, self.grant, item)
@@ -317,12 +317,12 @@ class Client:
         return presence_domain(self.session, self.grant, self.guid)
 
     @require_auth
-    @ItemList("server_list", "Guid", expiry="server")
+    @ItemList("server_list", "server", "Guid", expiry="server")
     def get_server_list(self):
         return server_list(self.session, self.grant)
 
     @require_auth
-    @SingleItem("server", listid="server_list", expiry="server")
+    @SingleItem("server", expiry="server")
     def get_server(self, server):
         return server_single(self.session, self.grant, server)
 
@@ -408,12 +408,12 @@ class Client:
         return user_guid(self.session, callsign)
 
     @require_auth
-    @ItemList("user_items_list", "UserGameItemGuid", expiry="user")
+    @ItemList("user_items_list", "user_items", "UserGameItemGuid", expiry="user")
     def get_user_items_list(self, user):
         return user_items(self.session, self.grant, user)
 
     @require_auth
-    @BatchItem("user_items", "UserGameItemGuid", listid="user_items_list", expiry="user")
+    @BatchItem("user_items", "UserGameItemGuid", expiry="user")
     def get_user_items(self, user, item):
         if isinstance(item, str):
             # Emulate a single-type request
@@ -435,12 +435,12 @@ class Client:
         return user_items_broker(self.session, self.grant, self.guid, item, data)
 
     @require_auth
-    @ItemList("user_item_stats_list", "UserGameItemGuid", expiry="stats")
+    @ItemList("user_item_stats_list", "user_item_stats", "UserGameItemGuid", expiry="stats")
     def get_user_items_stats_list(self, user):
         return user_items_stats(self.session, self.grant, user)
 
     @require_auth
-    @SingleItem("user_item_stats", listid="user_item_stats_list", expiry="stats")
+    @SingleItem("user_item_stats", expiry="stats")
     def get_user_item_stats(self, user, item):
         return user_items_stats_single(self.session, self.grant, user, item)
 
