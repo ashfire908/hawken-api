@@ -2,6 +2,7 @@
 # Low-level API interface
 # Copyright (c) 2013-2014 Andrew Hampe
 
+import socket
 import requests
 from requests.auth import AuthBase
 from requests.adapters import HTTPAdapter, DEFAULT_POOLSIZE, DEFAULT_RETRIES
@@ -148,7 +149,10 @@ class Session(requests.Session):
         return request
 
     def perform_request(self, request, check=True):
-        response = self.send(request, timeout=self.timeout)
+        try:
+            response = self.send(request, timeout=self.timeout)
+        except socket.timeout:
+            raise requests.exceptions.Timeout(request=request)
 
         # Check for HTTP errors
         if response.status_code != requests.codes.ok:
