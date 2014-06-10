@@ -19,6 +19,13 @@ def verify_guid(guid):
     return True
 
 
+def verify_match(match):
+    if re.match(r"^[0-9a-fA-F]{8}4[0-9a-fA-F]{23}$", guid) is None:
+        return False
+
+    return True
+
+
 def create_flags(*flags):
     class Flags:
         def __init__(self, *args):
