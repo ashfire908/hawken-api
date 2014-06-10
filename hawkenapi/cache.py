@@ -294,7 +294,7 @@ class BatchItem:
             args, kwargs = cache_args(f, client, *args, **kwargs)
 
             # Get the arguments
-            *kargs, items = list(args)
+            *kargs, items = args
 
             # Check if we have a single item
             if isinstance(items, str):

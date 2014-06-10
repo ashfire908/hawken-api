@@ -86,6 +86,6 @@ class JWTParser:
 
 
 def copyappend(l, x):
-    a = l[:]
+    a = list(l)
     a.append(x)
     return a
