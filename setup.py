@@ -4,14 +4,14 @@
 from distutils.core import setup
 
 setup(name="hawkenapi",
-      version="0.5.3.2",
+      version="0.6",
       description="Hawken API Client Library",
       author="Andrew Hampe",
       author_email="andrew.hampe@gmail.com",
       packages=["hawkenapi", "hawkenapi.sleekxmpp"],
       install_requires=["requests", "enum34"],
       extras_require={
-          "RedisCache": ["msgpack-python", "redis"],
+          "Cache": ["msgpack-python", "redis"],
           "XMPP": ["sleekxmpp"]
       },
       classifiers=(
