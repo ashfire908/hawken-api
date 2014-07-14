@@ -20,7 +20,7 @@ def verify_guid(guid):
 
 
 def verify_match(match):
-    if re.match(r"^[0-9a-fA-F]{8}4[0-9a-fA-F]{23}$", guid) is None:
+    if re.match(r"^[0-9a-fA-F]{8}4[0-9a-fA-F]{23}$", match) is None:
         return False
 
     return True
