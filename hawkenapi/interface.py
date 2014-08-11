@@ -12,7 +12,7 @@ from hawkenapi import endpoints
 from hawkenapi.endpoints import Methods
 from hawkenapi.exceptions import AuthenticationFailure, NotAuthorized, InternalServerError, \
     ServiceUnavailable, WrongUser, InvalidRequest, InvalidBatch, InvalidResponse, NotAuthenticated, \
-    NotAllowed, InsufficientFunds, InvalidStatTransfer, AccountBanned, AccountDeactivated
+    NotAllowed, InsufficientFunds, InvalidStatTransfer, AccountBanned, AccountDeactivated, AccountLockout
 from hawkenapi.util import verify_guid, chunks
 
 __all__ = ["Session", "auth", "deauth", "achievement_list", "achievement_batch", "achievement_reward_list",
@@ -237,6 +237,10 @@ def auth(session, username, password):
         raise AccountDeactivated(response["Message"], response["Status"])
 
     if response["Status"] == 403:
+        if AccountLockout.is_lockout(response["Message"]):
+            # Account locked out
+            raise AccountLockout(response["Message"], response["Status"], response["Result"])
+
         # Account banned
         raise AccountBanned(response["Message"], response["Status"], response["Result"])
 

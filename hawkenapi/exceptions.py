@@ -28,6 +28,27 @@ class AuthenticationFailure(ApiException):
         return AuthenticationFailure._re_bad_pass.match(message) is not None
 
 
+class AccountLockout(ApiException):
+    _re_lockout_start = re.compile(r"^User locked out for ([0-9]+) minutes\.$")
+    _re_lockout_active = re.compile(r"^([0-9]+) until end of account lockout\.$")
+
+    def __init__(self, message, code, attempts):
+        super(AccountLockout, self).__init__(message, code)
+
+        match = AccountLockout._re_lockout_start.match(message)
+        if match is None:
+            match = AccountLockout._re_lockout_start.match(message)
+        if match is None:
+            raise ValueError("Message cannot be matched")
+
+        self.duration = int(match.group(1))
+        self.attempts = int(attempts)
+
+    @staticmethod
+    def is_lockout(message):
+        return AccountLockout._re_lockout_start.match(message) is not None or AccountLockout._re_lockout_active.match(message) is not None
+
+
 class AccountBanned(ApiException):
     def __init__(self, message, code, result):
         super(AccountBanned, self).__init__(message, code)
