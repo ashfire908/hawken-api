@@ -135,7 +135,7 @@ class GuidList:
                     if response:
                         # Cache the result
                         pipe.multi()
-                        pipe.setex(key, expires, cache.encode(response))
+                        pipe.setex(ckey, expires, cache.encode(response))
                         pipe.execute()
                 except WatchError:
                     # Ignore it and just return the result
