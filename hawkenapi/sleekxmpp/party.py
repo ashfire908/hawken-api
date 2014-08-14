@@ -21,7 +21,7 @@ class CancelCode(str, Enum):
     member_kicked = "6"
 
 
-class Hawken_Party(base_plugin):
+class HawkenParty(base_plugin):
     """
     Hawken Party Plugin
     """

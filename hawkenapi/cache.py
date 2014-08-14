@@ -2,10 +2,8 @@
 # Caching interface
 # Copyright (c) 2013-2014 Andrew Hampe
 
-from abc import ABCMeta, abstractmethod
 from functools import wraps
 from inspect import signature
-from itertools import count
 from hawkenapi.util import copyappend
 
 try:
@@ -119,27 +117,27 @@ class GuidList:
 
             # Open a pipeline
             with r.pipeline() as pipe:
-                try:
-                    # Watch the key
-                    pipe.watch(ckey)
+                # Watch the key
+                pipe.watch(ckey)
 
-                    # Check the cache
-                    data = cache.decode(pipe.get(ckey))
-                    if data:
-                        # Returned cached data
-                        return data
+                # Check the cache
+                data = cache.decode(pipe.get(ckey))
+                if data:
+                    # Returned cached data
+                    return data
 
-                    # Perform the wrapped request
-                    response = f(client, *args, **kwargs)
+                # Perform the wrapped request
+                response = f(client, *args, **kwargs)
 
-                    if response:
-                        # Cache the result
-                        pipe.multi()
-                        pipe.setex(ckey, expires, cache.encode(response))
+                if response:
+                    # Cache the result
+                    pipe.multi()
+                    pipe.setex(ckey, expires, cache.encode(response))
+                    try:
                         pipe.execute()
-                except WatchError:
-                    # Ignore it and just return the result
-                    pass
+                    except WatchError:
+                        # Ignore it and just return the result
+                        pass
 
             return response
 
@@ -173,47 +171,47 @@ class ItemList:
 
             # Open a pipeline
             with r.pipeline() as pipe:
-                try:
-                    # Watch the key
-                    pipe.watch(lkey)
+                # Watch the key
+                pipe.watch(lkey)
 
-                    # Check the cache
-                    cache_list = [v.decode() for v in pipe.smembers(lkey)]
-                    if cache_list:
-                        # Load cached data
-                        ckeys = [cache.format_key(self.identifier, *copyappend(args, key), **kwargs) for key in cache_list]
-                        data = [cache.decode(v) for v in pipe.mget(ckeys) if v is not None]
-                        # Check if all the keys are intact
-                        if len(ckeys) == len(data):
-                            # Return the cached data
-                            return data
+                # Check the cache
+                cache_list = [v.decode() for v in pipe.smembers(lkey)]
+                if cache_list:
+                    # Load cached data
+                    ckeys = [cache.format_key(self.identifier, *copyappend(args, key), **kwargs) for key in cache_list]
+                    data = [cache.decode(v) for v in pipe.mget(ckeys) if v is not None]
+                    # Check if all the keys are intact
+                    if len(ckeys) == len(data):
+                        # Return the cached data
+                        return data
 
-                    # Perform the wrapped request
-                    response = f(client, *args, **kwargs)
+                # Perform the wrapped request
+                response = f(client, *args, **kwargs)
 
-                    if response:
-                        # Build the keys list and data dict
-                        keys = []
-                        data = {}
-                        for value in response:
-                            keys.append(value[self.key])
-                            data[cache.format_key(self.identifier, *copyappend(args, value[self.key]), **kwargs)] = cache.encode(value)
+                if response:
+                    # Build the keys list and data dict
+                    keys = []
+                    data = {}
+                    for value in response:
+                        keys.append(value[self.key])
+                        data[cache.format_key(self.identifier, *copyappend(args, value[self.key]), **kwargs)] = cache.encode(value)
 
-                        # Cache the result
-                        pipe.multi()
+                    # Cache the result
+                    pipe.multi()
 
-                        # Update the set
-                        pipe.delete(lkey)
-                        pipe.sadd(lkey, *keys)
+                    # Update the set
+                    pipe.delete(lkey)
+                    pipe.sadd(lkey, *keys)
 
-                        # Set the data
-                        for k, v in data.items():
-                            pipe.setex(k, expires, v)
+                    # Set the data
+                    for k, v in data.items():
+                        pipe.setex(k, expires, v)
 
+                    try:
                         pipe.execute()
-                except WatchError:
-                    # Ignore it and just return the result
-                    pass
+                    except WatchError:
+                        # Ignore it and just return the result
+                        pass
 
             return response
 
@@ -245,27 +243,27 @@ class SingleItem:
 
             # Open a pipeline
             with r.pipeline() as pipe:
-                try:
-                    # Watch the key
-                    pipe.watch(ckey)
+                # Watch the key
+                pipe.watch(ckey)
 
-                    # Check the cache
-                    data = cache.decode(pipe.get(ckey))
-                    if data:
-                        # Returned cached data
-                        return data
+                # Check the cache
+                data = cache.decode(pipe.get(ckey))
+                if data:
+                    # Returned cached data
+                    return data
 
-                    # Perform the wrapped request
-                    response = f(client, *args, **kwargs)
+                # Perform the wrapped request
+                response = f(client, *args, **kwargs)
 
-                    if response:
-                        # Cache the result
-                        pipe.multi()
-                        pipe.setex(ckey, expires, cache.encode(response))
-                        pipe.execute()
-                except WatchError:
-                    # Ignore it and just return the result
-                    pass
+                if response:
+                    # Cache the result
+                    pipe.multi()
+                    pipe.setex(ckey, expires, cache.encode(response))
+                    try:
+                            pipe.execute()
+                    except WatchError:
+                        # Ignore it and just return the result
+                        pass
 
             return response
 
@@ -303,27 +301,27 @@ class BatchItem:
 
                 # Open a pipeline
                 with r.pipeline() as pipe:
-                    try:
-                        # Watch the key
-                        pipe.watch(ckey)
+                    # Watch the key
+                    pipe.watch(ckey)
 
-                        # Check the cache
-                        data = cache.decode(pipe.get(ckey))
-                        if data:
-                            # Returned cached data
-                            return data
+                    # Check the cache
+                    data = cache.decode(pipe.get(ckey))
+                    if data:
+                        # Returned cached data
+                        return data
 
-                        # Perform the wrapped request
-                        response = f(client, *args, **kwargs)
+                    # Perform the wrapped request
+                    response = f(client, *args, **kwargs)
 
-                        if response:
-                            # Cache the result
-                            pipe.multi()
-                            pipe.setex(ckey, expires, cache.encode(response))
+                    if response:
+                        # Cache the result
+                        pipe.multi()
+                        pipe.setex(ckey, expires, cache.encode(response))
+                        try:
                             pipe.execute()
-                    except WatchError:
-                        # Ignore it and just return the result
-                        pass
+                        except WatchError:
+                            # Ignore it and just return the result
+                            pass
 
                 return response
 
@@ -331,44 +329,44 @@ class BatchItem:
             ckeys = [cache.format_key(self.identifier, *copyappend(kargs, item), **kwargs) for item in items]
 
             # Perform a full batched lookup
+            data = []
             with r.pipeline() as pipe:
-                try:
-                    # Watch the keys
-                    pipe.watch(ckeys)
+                # Watch the keys
+                pipe.watch(ckeys)
 
-                    if not bypass:
-                        data = []
-                        misses = []
-                        # Check the cache by key
-                        for key, value in zip(items, pipe.mget(ckeys)):
-                            if value is None:
-                                misses.append(key)
-                            else:
-                                data.append(value)
+                if not bypass:
+                    misses = []
+                    # Check the cache by key
+                    for key, value in zip(items, pipe.mget(ckeys)):
+                        if value is None:
+                            misses.append(key)
+                        else:
+                            data.append(value)
 
-                        # Check for any cache misses
-                        if len(misses) == 0:
-                            # Return cached data
-                            return data
+                    # Check for any cache misses
+                    if len(misses) == 0:
+                        # Return cached data
+                        return data
 
-                        # Perform the wrapped request
-                        response = f(client, *copyappend(kargs, misses), **kwargs)
-                    else:
-                        # Perform the wrapped request
-                        response = f(client, *copyappend(kargs, items), **kwargs)
+                    # Perform the wrapped request
+                    response = f(client, *copyappend(kargs, misses), **kwargs)
+                else:
+                    # Perform the wrapped request
+                    response = f(client, *copyappend(kargs, items), **kwargs)
 
-                    if response:
-                        # Cache the result
-                        pipe.multi()
-                        for v in response:
-                            pipe.setex(cache.format_key(self.identifier, *copyappend(kargs, v[self.key]), **kwargs), expires, cache.encode(v))
+                if response:
+                    # Cache the result
+                    pipe.multi()
+                    for v in response:
+                        pipe.setex(cache.format_key(self.identifier, *copyappend(kargs, v[self.key]), **kwargs), expires, cache.encode(v))
+                    try:
                         pipe.execute()
-                except WatchError:
-                    # Only populate the keys that are missing
-                    with r.pipeline() as pipe:
-                        for v in response:
-                            pipe.set(cache.format_key(self.identifier, *copyappend(kargs, v[self.key]), **kwargs), cache.encode(v), ex=expires, nx=True)
-                        pipe.execute()
+                    except WatchError:
+                        # Only populate the keys that are missing
+                        with r.pipeline() as inner_pipe:
+                            for v in response:
+                                inner_pipe.set(cache.format_key(self.identifier, *copyappend(kargs, v[self.key]), **kwargs), cache.encode(v), ex=expires, nx=True)
+                            inner_pipe.execute()
 
             if response and not bypass:
                 # Add in the missing data
