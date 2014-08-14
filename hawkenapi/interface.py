@@ -6,6 +6,7 @@ import socket
 import requests
 from requests.auth import AuthBase
 from requests.adapters import HTTPAdapter, DEFAULT_POOLSIZE, DEFAULT_RETRIES
+from requests.exceptions import Timeout
 import json
 import hawkenapi
 from hawkenapi import endpoints
@@ -152,7 +153,7 @@ class Session(requests.Session):
         try:
             response = self.send(request, timeout=self.timeout)
         except socket.timeout:
-            raise requests.exceptions.Timeout(request=request)
+            raise Timeout(request=request)
 
         # Check for HTTP errors
         if response.status_code != requests.codes.ok:
