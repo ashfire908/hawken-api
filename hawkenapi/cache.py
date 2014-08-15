@@ -117,14 +117,15 @@ class GuidList:
 
             # Open a pipeline
             with r.pipeline() as pipe:
-                # Watch the key
-                pipe.watch(ckey)
+                if not bypass:
+                    # Watch the key
+                    pipe.watch(ckey)
 
-                # Check the cache
-                data = cache.decode(pipe.get(ckey))
-                if data:
-                    # Returned cached data
-                    return data
+                    # Check the cache
+                    data = cache.decode(pipe.get(ckey))
+                    if data:
+                        # Returned cached data
+                        return data
 
                 # Perform the wrapped request
                 response = f(client, *args, **kwargs)
@@ -171,19 +172,20 @@ class ItemList:
 
             # Open a pipeline
             with r.pipeline() as pipe:
-                # Watch the key
-                pipe.watch(lkey)
+                if not bypass:
+                    # Watch the key
+                    pipe.watch(lkey)
 
-                # Check the cache
-                cache_list = [v.decode() for v in pipe.smembers(lkey)]
-                if cache_list:
-                    # Load cached data
-                    ckeys = [cache.format_key(self.identifier, *copyappend(args, key), **kwargs) for key in cache_list]
-                    data = [cache.decode(v) for v in pipe.mget(ckeys) if v is not None]
-                    # Check if all the keys are intact
-                    if len(ckeys) == len(data):
-                        # Return the cached data
-                        return data
+                    # Check the cache
+                    cache_list = [v.decode() for v in pipe.smembers(lkey)]
+                    if cache_list:
+                        # Load cached data
+                        ckeys = [cache.format_key(self.identifier, *copyappend(args, key), **kwargs) for key in cache_list]
+                        data = [cache.decode(v) for v in pipe.mget(ckeys) if v is not None]
+                        # Check if all the keys are intact
+                        if len(ckeys) == len(data):
+                            # Return the cached data
+                            return data
 
                 # Perform the wrapped request
                 response = f(client, *args, **kwargs)
@@ -243,14 +245,15 @@ class SingleItem:
 
             # Open a pipeline
             with r.pipeline() as pipe:
-                # Watch the key
-                pipe.watch(ckey)
+                if not bypass:
+                    # Watch the key
+                    pipe.watch(ckey)
 
-                # Check the cache
-                data = cache.decode(pipe.get(ckey))
-                if data:
-                    # Returned cached data
-                    return data
+                    # Check the cache
+                    data = cache.decode(pipe.get(ckey))
+                    if data:
+                        # Returned cached data
+                        return data
 
                 # Perform the wrapped request
                 response = f(client, *args, **kwargs)
@@ -301,14 +304,15 @@ class BatchItem:
 
                 # Open a pipeline
                 with r.pipeline() as pipe:
-                    # Watch the key
-                    pipe.watch(ckey)
+                    if not bypass:
+                        # Watch the key
+                        pipe.watch(ckey)
 
-                    # Check the cache
-                    data = cache.decode(pipe.get(ckey))
-                    if data:
-                        # Returned cached data
-                        return data
+                        # Check the cache
+                        data = cache.decode(pipe.get(ckey))
+                        if data:
+                            # Returned cached data
+                            return data
 
                     # Perform the wrapped request
                     response = f(client, *args, **kwargs)
