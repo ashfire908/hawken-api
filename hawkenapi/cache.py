@@ -341,7 +341,7 @@ class BatchItem:
                 if not bypass:
                     misses = []
                     # Check the cache by key
-                    for key, value in zip(items, pipe.mget(ckeys)):
+                    for key, value in zip(items, (cache.decode(v) for v in pipe.mget(ckeys))):
                         if value is None:
                             misses.append(key)
                         else:
