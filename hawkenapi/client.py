@@ -218,21 +218,6 @@ class Client:
         return bundle_batch(self.session, self.grant, bundle)
 
     @require_auth
-    @GuidList("clans_list", expiry="clan")
-    def get_clan_list(self, tag=None, name=None):
-        return clan_list(self.session, self.grant, tag=tag, name=name)
-
-    @require_auth
-    @SingleItem("clans", expiry="clan")
-    def get_clan(self, clan):
-        return clan_single(self.session, self.grant, clan)
-
-    @require_auth
-    @SingleItem("clan_users", expiry="clan")
-    def get_clan_users(self, clan):
-        return clan_users(self.session, self.grant, clan)
-
-    @require_auth
     @SingleItem("hawken_credits", expiry="user")
     def get_hawken_credits(self, user):
         return currency_hawken(self.session, self.grant, user)
@@ -372,11 +357,6 @@ class Client:
     @SingleItem("user", expiry="user")
     def get_user(self, identifier):
         return user_account(self.session, self.grant, identifier)
-
-    @require_auth
-    @SingleItem("user_clan", expiry="clan")
-    def get_user_clan(self, user):
-        return user_clan(self.session, self.grant, user)
 
     @require_auth
     @SingleItem("user_eula", expiry="user")

@@ -18,19 +18,18 @@ from hawkenapi.util import verify_guid, chunks
 
 __all__ = ["Session", "auth", "deauth", "achievement_list", "achievement_batch", "achievement_reward_list",
            "achievement_reward_single", "achievement_reward_batch", "achievement_user_list", "achievement_user_batch",
-           "achievement_user_unlock", "antiaddiction", "clan_list", "clan_single", "clan_users", "currency_hawken",
-           "currency_meteor", "events_url", "game_items", "game_items_single", "game_items_batch", "game_offers_list",
-           "game_offers_single", "game_offers_batch", "game_offers_redeem", "game_offers_rent",
-           "generate_advertisement_matchmaking", "generate_advertisement_server", "matchmaking_advertisement",
-           "matchmaking_advertisement_create", "matchmaking_advertisement_delete", "presence_access", "presence_domain",
-           "server_list", "server_single", "stat_overflow_list", "stat_overflow_single", "stat_overflow_transfer_from",
-           "stat_overflow_transfer_to", "status_game_client", "status_game_servers", "status_services",
-           "user_transaction", "uniquevalues_list", "user_account", "user_clan", "user_eula_read", "user_game_settings",
-           "user_game_settings_create", "user_game_settings_update", "user_game_settings_delete", "user_guid",
-           "user_items", "user_items_batch", "user_items_broker", "user_items_stats", "user_items_stats_single",
-           "user_meteor_settings", "user_publicdata_single", "user_server", "user_stats_single", "user_stats_batch",
-           "version", "voice_access", "voice_info", "voice_lookup", "voice_user", "voice_channel", "bundle_list",
-           "bundle_single", "bundle_batch"]
+           "achievement_user_unlock", "antiaddiction", "currency_hawken", "currency_meteor", "events_url", "game_items",
+           "game_items_single", "game_items_batch", "game_offers_list", "game_offers_single", "game_offers_batch",
+           "game_offers_redeem", "game_offers_rent", "generate_advertisement_matchmaking",
+           "generate_advertisement_server", "matchmaking_advertisement", "matchmaking_advertisement_create",
+           "matchmaking_advertisement_delete", "presence_access", "presence_domain", "server_list", "server_single",
+           "stat_overflow_list", "stat_overflow_single", "stat_overflow_transfer_from", "stat_overflow_transfer_to",
+           "status_game_client", "status_game_servers", "status_services", "user_transaction", "uniquevalues_list",
+           "user_account", "user_eula_read", "user_game_settings", "user_game_settings_create",
+           "user_game_settings_update", "user_game_settings_delete", "user_guid", "user_items", "user_items_batch",
+           "user_items_broker", "user_items_stats", "user_items_stats_single", "user_meteor_settings",
+           "user_publicdata_single", "user_server", "user_stats_single", "user_stats_batch", "version", "voice_access",
+           "voice_info", "voice_lookup", "voice_user", "voice_channel", "bundle_list", "bundle_single", "bundle_batch"]
 
 batch_limit = 200
 
@@ -467,43 +466,6 @@ def bundle_batch(session, grant, guids):
 
     # Return data set
     return data
-
-
-def clan_list(session, grant, tag=None, name=None):
-    response = session.api_get(endpoints.clan, auth=grant, clantag=tag, clanname=name)
-
-    # Return response
-    return response["Result"]
-
-
-def clan_single(session, grant, guid):
-    # Validate the guid given
-    if not verify_guid(guid):
-        raise ValueError("Invalid clan GUID given")
-
-    response = session.api_get(endpoints.clan_single, guid, auth=grant)
-
-    if response["Status"] == 404:
-        # No such clan
-        return None
-
-    # Return response
-    return response["Result"]
-
-
-def clan_users(session, grant, guid):
-    # Validate the guid given
-    if not verify_guid(guid):
-        raise ValueError("Invalid clan GUID given")
-
-    response = session.api_get(endpoints.clan_users, guid, auth=grant)
-
-    if response["Status"] == 404:
-        # No such clan
-        return None
-
-    # Return response
-    return response["Result"]
 
 
 def currency_hawken(session, grant, guid):
@@ -1064,21 +1026,6 @@ def user_account(session, grant, identifier):
     except NotAllowed as e:
         # User does not match access grant user
         raise WrongUser(e.message, e.code)
-
-    # Return response
-    return response["Result"]
-
-
-def user_clan(session, grant, guid):
-    # Verify guid given
-    if not verify_guid(guid):
-        raise ValueError("Invalid user GUID given")
-
-    response = session.api_get(endpoints.user_clan, guid, auth=grant)
-
-    if response["Status"] == 404:
-        # No such user/User is not in a clan
-        return None
 
     # Return response
     return response["Result"]
