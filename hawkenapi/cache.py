@@ -204,6 +204,7 @@ class ItemList:
                     # Update the set
                     pipe.delete(lkey)
                     pipe.sadd(lkey, *keys)
+                    pipe.expire(lkey, expires)
 
                     # Set the data
                     for k, v in data.items():
