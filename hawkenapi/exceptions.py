@@ -37,7 +37,7 @@ class AccountLockout(ApiException):
 
         match = AccountLockout._re_lockout_start.match(message)
         if match is None:
-            match = AccountLockout._re_lockout_start.match(message)
+            match = AccountLockout._re_lockout_active.match(message)
         if match is None:
             raise ValueError("Message cannot be matched")
 
