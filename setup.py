@@ -4,7 +4,7 @@
 from distutils.core import setup
 
 setup(name="hawkenapi",
-      version="0.6.1.2",
+      version="0.6.1.3",
       description="Hawken API Client Library",
       author="Andrew Hampe",
       author_email="andrew.hampe@gmail.com",
