@@ -4,14 +4,10 @@ __pycache__
 *.egg-info
 
 # Virtualenv
-pyvenv.cfg
-bin/
-Scripts/
-[Ll]ib/
-[Ii]nclude/
-tcl/
+venv/
 
 # IDE/Editor Files
+*.sublime-project
 *.sublime-workspace
 .codeintel
 .idea/
