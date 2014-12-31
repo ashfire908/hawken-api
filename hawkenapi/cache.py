@@ -26,7 +26,7 @@ class Expiry:
     clan = 300  # 5 minutes
     game = 3600  # 1 hour
     globals = 10800  # 3 hours
-    persistent = 25200  # 1 week
+    persistent = 604800  # 1 week
     server = 60  # 1 minute
     stats = 300  # 5 minutes
     status = 60  # 1 minute
