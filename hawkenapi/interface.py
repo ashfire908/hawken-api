@@ -29,7 +29,8 @@ __all__ = ["Session", "auth", "deauth", "achievement_list", "achievement_batch",
            "user_game_settings_update", "user_game_settings_delete", "user_guid", "user_items", "user_items_batch",
            "user_items_broker", "user_items_stats", "user_items_stats_single", "user_meteor_settings",
            "user_publicdata_single", "user_server", "user_stats_single", "user_stats_batch", "version", "voice_access",
-           "voice_info", "voice_lookup", "voice_user", "voice_channel", "bundle_list", "bundle_single", "bundle_batch"]
+           "voice_info", "voice_lookup", "voice_user", "voice_channel", "bundle_list", "bundle_single", "bundle_batch",
+           "user_publicdata_batch"]
 
 batch_limit = 200
 
@@ -1258,6 +1259,27 @@ def user_meteor_settings(session, grant, guid):
 
     # Return response
     return response["Result"]
+
+
+def user_publicdata_batch(session, grant, guids):
+    # Validate the guids given
+    if len(guids) == 0:
+        raise ValueError("List of user GUIDs cannot be empty")
+    for guid in guids:
+        if not verify_guid(guid):
+            raise ValueError("Invalid user GUID given")
+
+    data = []
+    # Perform a chunked request
+    for chunk in chunks(guids, batch_limit):
+        # Retrieve a chunk and add the response to the data set
+        data.extend(session.api_get(endpoints.user_publicdata_batch, auth=grant, batch=chunk)["Result"])
+
+    # Remove empty entries
+    data = [user for user in data if len(user) > 1]
+
+    # Return data set
+    return data
 
 
 def user_publicdata_single(session, grant, guid):

@@ -430,17 +430,30 @@ class Client:
         return user_meteor_settings(self.session, self.grant, user)
 
     @require_auth
-    @SingleItem("user_legacy_data", expiry="persistent")
+    @BatchItem("user_legacy_data", "Guid", expiry="persistent")
     def get_user_legacy_data(self, user):
-        return user_publicdata_single(self.session, self.grant, user)
+        if isinstance(user, str):
+            data = user_publicdata_single(self.session, self.grant, user)
+
+            # Keep single item interface compatible with batch item caching
+            if data is not None:
+                data["Guid"] = user
+
+            return data
+
+        return user_publicdata_batch(self.session, self.grant, user)
 
     @require_auth
     def get_user_callsign(self, user, **kwargs):
         response = self.get_user_legacy_data(user, **kwargs)
 
         if response is not None:
-            # Some users don't have a callsign
-            return response.get("UniqueCaseInsensitive_Callsign", None)
+            if isinstance(user, str):
+                # Some users don't have a callsign
+                return response.get("UniqueCaseInsensitive_Callsign", None)
+
+            # Create map of callsigns
+            return {item["Guid"]: item.get("UniqueCaseInsensitive_Callsign", None) for item in response}
 
         return None
 
