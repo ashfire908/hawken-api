@@ -88,9 +88,17 @@ class Cache:
             key += ":" + ".".join(args)
 
         # Append the keyword arguments
-        kw = "|".join(sorted(k + "=" + v for k, v in kwargs.items() if v is not None))
-        if len(kw) > 0:
-            key += "#" + kw
+        if len(kwargs) > 0:
+            kwarg_pairs = []
+
+            for k, v in kwargs.items():
+                if isinstance(v, str):
+                    kwarg_pairs.append(k + "=" + v)
+                else:
+                    # Assume it's a list
+                    kwarg_pairs.append(k + "=" + ",".join(sorted(v)))
+
+            key += "#" + "|".join(kwarg_pairs)
 
         return key.lower()
 
