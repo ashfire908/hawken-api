@@ -362,6 +362,10 @@ class BatchItem:
 
                 return response
 
+            if len(items) == 0:
+                # Nothing to cache, pass onto wrapped method
+                return f(client, *args, **kwargs)
+
             # Get the cache keys
             ckeys = [cache.format_key(self.identifier, *copyappend(kargs, item), **kwargs) for item in items]
 
