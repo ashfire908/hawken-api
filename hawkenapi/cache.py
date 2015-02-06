@@ -2,8 +2,9 @@
 # Caching interface
 # Copyright (c) 2013-2014 Andrew Hampe
 
+from collections import OrderedDict
 from functools import wraps
-from inspect import signature
+from inspect import signature, Parameter
 from hawkenapi.util import copyappend
 
 try:
@@ -17,8 +18,31 @@ else:
 
 
 def cache_args(f, *args, **kwargs):
-    bound = signature(f).bind(*args, **kwargs)
-    return bound.args[1:], bound.kwargs
+    # Manually bind arguments since signature().bind().args/kwargs is broken
+    sig = signature(f)
+    bound = sig.bind(*args, **kwargs)
+    new_args = []
+    new_kwargs = OrderedDict()
+    for param in sig.parameters.values():
+        if param.kind == Parameter.POSITIONAL_ONLY:
+            new_args.append(bound.arguments[param.name])
+        elif param.kind == Parameter.POSITIONAL_OR_KEYWORD:
+            if param.default == Parameter.empty:
+                new_args.append(bound.arguments[param.name])
+            elif param.name in bound.arguments and bound.arguments[param.name] != param.default:
+                new_kwargs[param.name] = bound.arguments[param.name]
+        elif param.kind == Parameter.VAR_POSITIONAL:
+            if param.name in bound.arguments:
+                new_args.extend(bound.arguments[param.name])
+        elif param.kind == Parameter.KEYWORD_ONLY:
+            if param.name in bound.arguments:
+                new_kwargs[param.name] = bound.arguments[param.name]
+        # VAR_KEYWORD
+        elif param.name in bound.arguments:
+            for name, value in bound.arguments[param.name]:
+                new_kwargs[name] = value
+
+    return args[1:], new_kwargs
 
 
 class Expiry:
