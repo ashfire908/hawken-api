@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 # Caching interface
-# Copyright (c) 2013-2014 Andrew Hampe
+# Copyright (c) 2013-2015 Andrew Hampe
 
 from collections import OrderedDict
 from functools import wraps

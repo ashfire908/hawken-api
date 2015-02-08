@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 # API endpoint definitions
-# Copyright (c) 2013-2014 Andrew Hampe
+# Copyright (c) 2013-2015 Andrew Hampe
 
 from enum import Enum
 import urllib.parse

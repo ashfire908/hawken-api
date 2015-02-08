@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 # Low-level API interface
-# Copyright (c) 2013-2014 Andrew Hampe
+# Copyright (c) 2013-2015 Andrew Hampe
 
 import socket
 import requests

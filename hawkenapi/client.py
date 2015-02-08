@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 # High-level API client
-# Copyright (c) 2013-2014 Andrew Hampe
+# Copyright (c) 2013-2015 Andrew Hampe
 
 from datetime import datetime
 from functools import wraps
