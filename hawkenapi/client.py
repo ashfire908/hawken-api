@@ -18,8 +18,8 @@ logger = logging.getLogger(__name__)
 
 
 # Decorators
-def require_auth(f):
-    @wraps(f)
+def require_auth(func):
+    @wraps(func)
     def auth_handler(self, *args, **kwargs):
         reauthed = False
 
@@ -34,13 +34,13 @@ def require_auth(f):
             reauthed = True
 
         try:
-            response = f(self, *args, **kwargs)
+            response = func(self, *args, **kwargs)
         except NotAuthorized as e:
             # Only reauth if the grant expired
             if e.expired and not reauthed:
-                logger.info("Automatically authenticating [reauth] ([{0}] {1})".format(e.code, e.message))
+                logger.info("Automatically authenticating [reauth] ([%i] {%s})", e.code, e.message)
                 self.reauth()
-                response = f(self, *args, **kwargs)
+                response = func(self, *args, **kwargs)
             else:
                 raise
 
@@ -57,7 +57,7 @@ class AccessGrant:
         jwt = JWTParser(self.token)
 
         # Set data
-        self.id = jwt.payload["jti"]
+        self.token_id = jwt.payload["jti"]
         self.user = jwt.payload["prn"]
         self.expires = jwt.payload["exp"]
         self.not_before = jwt.payload["nbf"]
@@ -76,7 +76,7 @@ class Client:
         if session:
             self.session = session
         else:
-            self.session = Session()
+            self.session = ApiSession()
 
         # Init auth data
         self._grant = None

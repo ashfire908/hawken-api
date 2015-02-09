@@ -12,14 +12,14 @@ try:
     import redis
     from redis.exceptions import WatchError
 except ImportError as e:
-    _failedload = (True, e)
+    IMPORT_RESULT = (True, e)
 else:
-    _failedload = (False, )
+    IMPORT_RESULT = (False, )
 
 
-def cache_args(f, *args, **kwargs):
+def cache_args(func, *args, **kwargs):
     # Manually bind arguments since signature().bind().args/kwargs is broken
-    sig = signature(f)
+    sig = signature(func)
     bound = sig.bind(*args, **kwargs)
     new_args = []
     new_kwargs = OrderedDict()
@@ -69,8 +69,8 @@ class Cache:
             self.expiry = Expiry()
 
         # Check if we successfully imported our deps
-        if _failedload[0]:
-            raise _failedload[1]
+        if IMPORT_RESULT[0]:
+            raise IMPORT_RESULT[1]
 
         # Setup the client
         if url is not None:
@@ -91,12 +91,12 @@ class Cache:
         if len(kwargs) > 0:
             kwarg_pairs = []
 
-            for k, v in kwargs.items():
-                if isinstance(v, str):
-                    kwarg_pairs.append(k + "=" + v)
+            for name, value in kwargs.items():
+                if isinstance(value, str):
+                    kwarg_pairs.append(name + "=" + value)
                 else:
                     # Assume it's a list
-                    kwarg_pairs.append(k + "=" + ",".join(sorted(v)))
+                    kwarg_pairs.append(name + "=" + ",".join(sorted(value)))
 
             key += "#" + "|".join(kwarg_pairs)
 
@@ -105,22 +105,24 @@ class Cache:
     def get_expiry(self, eclass):
         return self.expiry.get_class(eclass)
 
-    def encode(self, data):
+    @staticmethod
+    def encode(data):
         return msgpack.packb(data)
 
-    def decode(self, data):
+    @staticmethod
+    def decode(data):
         if not data:
             return data
         return msgpack.unpackb(data, encoding="utf-8")
 
 
-def nocache(f):
-    @wraps(f)
+def nocache(func):
+    @wraps(func)
     def wrap(*args, **kwargs):
         kwargs.pop("cache_skip", None)
         kwargs.pop("cache_bypass", None)
 
-        return f(*args, **kwargs)
+        return func(*args, **kwargs)
     return wrap
 
 
@@ -129,26 +131,26 @@ class GuidList:
         self.identifier = identifier
         self.expiry_class = expiry
 
-    def __call__(self, f):
-        @wraps(f)
+    def __call__(self, func):
+        @wraps(func)
         def wrap(client, *args, **kwargs):
             skip = kwargs.pop("cache_skip", False)
             bypass = kwargs.pop("cache_bypass", False)
             cache = client.cache
             if skip or cache is None:
                 # No cache registered
-                return f(client, *args, **kwargs)
+                return func(client, *args, **kwargs)
             expires = cache.get_expiry(self.expiry_class)
-            r = cache.redis
+            redis_client = cache.redis
 
             # Update the positional args and verify the args work for the wrapped function
-            args, kwargs = cache_args(f, client, *args, **kwargs)
+            args, kwargs = cache_args(func, client, *args, **kwargs)
 
             # Get the cache key
             ckey = cache.format_key(self.identifier, *args, **kwargs)
 
             # Open a pipeline
-            with r.pipeline() as pipe:
+            with redis_client.pipeline() as pipe:
                 if not bypass:
                     # Watch the key
                     pipe.watch(ckey)
@@ -160,7 +162,7 @@ class GuidList:
                         return data
 
                 # Perform the wrapped request
-                response = f(client, *args, **kwargs)
+                response = func(client, *args, **kwargs)
 
                 if response:
                     # Cache the result
@@ -184,26 +186,26 @@ class ItemList:
         self.key = key
         self.expiry_class = expiry
 
-    def __call__(self, f):
-        @wraps(f)
+    def __call__(self, func):
+        @wraps(func)
         def wrap(client, *args, **kwargs):
             skip = kwargs.pop("cache_skip", False)
             bypass = kwargs.pop("cache_bypass", False)
             cache = client.cache
             if skip or cache is None:
                 # No cache registered
-                return f(client, *args, **kwargs)
+                return func(client, *args, **kwargs)
             expires = cache.get_expiry(self.expiry_class)
-            r = cache.redis
+            redis_client = cache.redis
 
             # Update the positional args and verify the args work for the wrapped function
-            args, kwargs = cache_args(f, client, *args, **kwargs)
+            args, kwargs = cache_args(func, client, *args, **kwargs)
 
             # Get the list key
             lkey = cache.format_key(self.list_identifier, *args, **kwargs)
 
             # Open a pipeline
-            with r.pipeline() as pipe:
+            with redis_client.pipeline() as pipe:
                 if not bypass:
                     # Watch the key
                     pipe.watch(lkey)
@@ -220,7 +222,7 @@ class ItemList:
                             return data
 
                 # Perform the wrapped request
-                response = f(client, *args, **kwargs)
+                response = func(client, *args, **kwargs)
 
                 if response:
                     # Build the keys list and data dict
@@ -239,8 +241,8 @@ class ItemList:
                     pipe.expire(lkey, expires)
 
                     # Set the data
-                    for k, v in data.items():
-                        pipe.setex(k, expires, v)
+                    for key, data in data.items():
+                        pipe.setex(key, expires, data)
 
                     try:
                         pipe.execute()
@@ -258,26 +260,26 @@ class SingleItem:
         self.identifier = identifier
         self.expiry_class = expiry
 
-    def __call__(self, f):
-        @wraps(f)
+    def __call__(self, func):
+        @wraps(func)
         def wrap(client, *args, **kwargs):
             skip = kwargs.pop("cache_skip", False)
             bypass = kwargs.pop("cache_bypass", False)
             cache = client.cache
             if skip or cache is None:
                 # No cache registered
-                return f(client, *args, **kwargs)
+                return func(client, *args, **kwargs)
             expires = cache.get_expiry(self.expiry_class)
-            r = cache.redis
+            redis_client = cache.redis
 
             # Update the positional args and verify the args work for the wrapped function
-            args, kwargs = cache_args(f, client, *args, **kwargs)
+            args, kwargs = cache_args(func, client, *args, **kwargs)
 
             # Get the cache key
             ckey = cache.format_key(self.identifier, *args, **kwargs)
 
             # Open a pipeline
-            with r.pipeline() as pipe:
+            with redis_client.pipeline() as pipe:
                 if not bypass:
                     # Watch the key
                     pipe.watch(ckey)
@@ -289,14 +291,14 @@ class SingleItem:
                         return data
 
                 # Perform the wrapped request
-                response = f(client, *args, **kwargs)
+                response = func(client, *args, **kwargs)
 
                 if response:
                     # Cache the result
                     pipe.multi()
                     pipe.setex(ckey, expires, cache.encode(response))
                     try:
-                            pipe.execute()
+                        pipe.execute()
                     except WatchError:
                         # Ignore it and just return the result
                         pass
@@ -312,20 +314,20 @@ class BatchItem:
         self.key = key
         self.expiry_class = expiry
 
-    def __call__(self, f):
-        @wraps(f)
+    def __call__(self, func):
+        @wraps(func)
         def wrap(client, *args, **kwargs):
             skip = kwargs.pop("cache_skip", False)
             bypass = kwargs.pop("cache_bypass", False)
             cache = client.cache
             if skip or cache is None:
                 # No cache registered
-                return f(client, *args, **kwargs)
+                return func(client, *args, **kwargs)
             expires = cache.get_expiry(self.expiry_class)
-            r = cache.redis
+            redis_client = cache.redis
 
             # Update the positional args and verify the args work for the wrapped function
-            args, kwargs = cache_args(f, client, *args, **kwargs)
+            args, kwargs = cache_args(func, client, *args, **kwargs)
 
             # Get the arguments
             *kargs, items = args
@@ -336,7 +338,7 @@ class BatchItem:
                 ckey = cache.format_key(self.identifier, *args, **kwargs)
 
                 # Open a pipeline
-                with r.pipeline() as pipe:
+                with redis_client.pipeline() as pipe:
                     if not bypass:
                         # Watch the key
                         pipe.watch(ckey)
@@ -348,7 +350,7 @@ class BatchItem:
                             return data
 
                     # Perform the wrapped request
-                    response = f(client, *args, **kwargs)
+                    response = func(client, *args, **kwargs)
 
                     if response:
                         # Cache the result
@@ -364,14 +366,14 @@ class BatchItem:
 
             if len(items) == 0:
                 # Nothing to cache, pass onto wrapped method
-                return f(client, *args, **kwargs)
+                return func(client, *args, **kwargs)
 
             # Get the cache keys
             ckeys = [cache.format_key(self.identifier, *copyappend(kargs, item), **kwargs) for item in items]
 
             # Perform a full batched lookup
             data = []
-            with r.pipeline() as pipe:
+            with redis_client.pipeline() as pipe:
                 # Watch the keys
                 pipe.watch(ckeys)
 
@@ -390,23 +392,23 @@ class BatchItem:
                         return data
 
                     # Perform the wrapped request
-                    response = f(client, *copyappend(kargs, misses), **kwargs)
+                    response = func(client, *copyappend(kargs, misses), **kwargs)
                 else:
                     # Perform the wrapped request
-                    response = f(client, *copyappend(kargs, items), **kwargs)
+                    response = func(client, *copyappend(kargs, items), **kwargs)
 
                 if response:
                     # Cache the result
                     pipe.multi()
-                    for v in response:
-                        pipe.setex(cache.format_key(self.identifier, *copyappend(kargs, v[self.key]), **kwargs), expires, cache.encode(v))
+                    for item in response:
+                        pipe.setex(cache.format_key(self.identifier, *copyappend(kargs, item[self.key]), **kwargs), expires, cache.encode(item))
                     try:
                         pipe.execute()
                     except WatchError:
                         # Only populate the keys that are missing
-                        with r.pipeline() as inner_pipe:
-                            for v in response:
-                                inner_pipe.set(cache.format_key(self.identifier, *copyappend(kargs, v[self.key]), **kwargs), cache.encode(v), ex=expires, nx=True)
+                        with redis_client.pipeline() as inner_pipe:
+                            for item in response:
+                                inner_pipe.set(cache.format_key(self.identifier, *copyappend(kargs, item[self.key]), **kwargs), cache.encode(item), ex=expires, nx=True)
                             inner_pipe.execute()
 
             if response and not bypass:

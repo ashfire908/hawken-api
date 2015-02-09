@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 # Utilities
-# Copyright (c) 2013-2014 Andrew Hampe
+# Copyright (c) 2013-2015 Andrew Hampe
 
 import re
 import base64
@@ -8,8 +8,8 @@ import json
 from datetime import datetime
 
 
-def chunks(l, n):
-    return [l[i:i + n] for i in range(0, len(l), n)]
+def chunks(seq, length):
+    return [seq[i:i + length] for i in range(0, len(seq), length)]
 
 
 def verify_guid(guid):
@@ -29,27 +29,14 @@ def verify_match(match):
 def create_flags(*flags):
     class Flags:
         def __init__(self, *args):
-            self._flags = {}
-
             for flag in flags:
-                self._flags[flag] = False
+                setattr(self, flag, False)
 
             for flag in args:
+                if flag not in flags:
+                    raise ValueError("Invalid flag")
+
                 setattr(self, flag, True)
-
-        def __getattr__(self, name):
-            try:
-                return self._flags[name]
-            except KeyError:
-                raise AttributeError
-
-        def __setattr__(self, name, value):
-            if name.startswith("_"):
-                object.__setattr__(self, name, value)
-            elif name not in flags:
-                raise ValueError("Not a valid flag")
-
-            self._flags[name] = bool(value)
 
     return Flags
 
@@ -81,11 +68,11 @@ class JWTParser:
             yield element + "=" * ((4 - len(element) % 4) % 4)
 
     @staticmethod
-    def parse_timestamp(s):
-        return datetime.strptime(s, "%a, %d %b %Y %H:%M:%S %Z")
+    def parse_timestamp(timestamp):
+        return datetime.strptime(timestamp, "%a, %d %b %Y %H:%M:%S %Z")
 
 
-def copyappend(l, x):
-    a = list(l)
-    a.append(x)
-    return a
+def copyappend(seq, item):
+    seq_list = list(seq)
+    seq_list.append(item)
+    return seq_list

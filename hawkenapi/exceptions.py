@@ -10,7 +10,7 @@ class ApiException(Exception):
     def __init__(self, message, code):
         self.message = message
         self.code = code
-        super(ApiException, self).__init__(message)
+        super().__init__(message)
 
     def __str__(self):
         return "Status {0}: {1}".format(self.code, self.message)
@@ -33,7 +33,7 @@ class AccountLockout(ApiException):
     _re_lockout_active = re.compile(r"^([0-9]+) until end of account lockout\.$")
 
     def __init__(self, message, code, attempts):
-        super(AccountLockout, self).__init__(message, code)
+        super().__init__(message, code)
 
         match = AccountLockout._re_lockout_start.match(message)
         if match is None:
@@ -51,7 +51,7 @@ class AccountLockout(ApiException):
 
 class AccountBanned(ApiException):
     def __init__(self, message, code, result):
-        super(AccountBanned, self).__init__(message, code)
+        super().__init__(message, code)
 
         self.reason = result
 
@@ -124,7 +124,7 @@ class InvalidRequest(ApiException):
 class InvalidResponse(ApiException):
     def __init__(self, message, code, result):
         self.result = result
-        super(InvalidResponse, self).__init__(message, code)
+        super().__init__(message, code)
 
     def __str__(self):
         return self.message
@@ -133,7 +133,7 @@ class InvalidResponse(ApiException):
 class InvalidBatch(ApiException):
     def __init__(self, message, code, result):
         self.result = result
-        super(InvalidBatch, self).__init__(message, code)
+        super().__init__(message, code)
 
     @property
     def errors(self):
@@ -152,7 +152,7 @@ class InsufficientFunds(ApiException):
     _re_parse = re.compile(r"^Insufficient ([HM]P) funds\.\s+Cost ([0-9]+)\s*:\s*Balance ([0-9]+)$")
 
     def __init__(self, message, code):
-        super(InsufficientFunds, self).__init__(message, code)
+        super().__init__(message, code)
 
         # Parse out the metadata
         self._match = InsufficientFunds._re_parse.match(message)
@@ -184,7 +184,7 @@ class InvalidStatTransfer(ApiException):
         insufficient = 4
 
     def __init__(self, message, code):
-        super(InvalidStatTransfer, self).__init__(message, code)
+        super().__init__(message, code)
 
         self.type = InvalidStatTransfer.Error.none
         self.item = None
