@@ -6,6 +6,8 @@ import re
 import base64
 import json
 from datetime import datetime
+from collections import OrderedDict
+from inspect import signature, Parameter
 
 
 def chunks(seq, length):
@@ -76,3 +78,36 @@ def copyappend(seq, item):
     seq_list = list(seq)
     seq_list.append(item)
     return seq_list
+
+
+def bind_arguments(func, *args, **kwargs):
+    # Manually bind arguments since signature().bind().args/kwargs is broken
+    sig = signature(func)
+    bound = sig.bind(*args, **kwargs)
+    new_args = []
+    new_kwargs = OrderedDict()
+    for param in sig.parameters.values():
+        if param.kind == Parameter.POSITIONAL_ONLY:
+            new_args.append(bound.arguments[param.name])
+        elif param.kind == Parameter.POSITIONAL_OR_KEYWORD:
+            if param.default == Parameter.empty:
+                new_args.append(bound.arguments[param.name])
+            elif param.name in bound.arguments and bound.arguments[param.name] != param.default:
+                new_kwargs[param.name] = bound.arguments[param.name]
+        elif param.kind == Parameter.VAR_POSITIONAL:
+            if param.name in bound.arguments:
+                new_args.extend(bound.arguments[param.name])
+        elif param.kind == Parameter.KEYWORD_ONLY:
+            if param.name in bound.arguments:
+                new_kwargs[param.name] = bound.arguments[param.name]
+        # VAR_KEYWORD
+        elif param.name in bound.arguments:
+            for name, value in bound.arguments[param.name]:
+                new_kwargs[name] = value
+
+    return new_args, new_kwargs
+
+
+def bind_wrapped_arguments(func, *args, **kwargs):
+    new_args, new_kwargs = bind_arguments(func, *args, **kwargs)
+    return new_args[1:], new_kwargs

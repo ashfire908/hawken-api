@@ -2,10 +2,8 @@
 # Caching interface
 # Copyright (c) 2013-2015 Andrew Hampe
 
-from collections import OrderedDict
 from functools import wraps
-from inspect import signature, Parameter
-from hawkenapi.util import copyappend
+from hawkenapi.util import copyappend, bind_wrapped_arguments
 
 try:
     import msgpack
@@ -15,34 +13,6 @@ except ImportError as e:
     IMPORT_RESULT = (True, e)
 else:
     IMPORT_RESULT = (False, )
-
-
-def cache_args(func, *args, **kwargs):
-    # Manually bind arguments since signature().bind().args/kwargs is broken
-    sig = signature(func)
-    bound = sig.bind(*args, **kwargs)
-    new_args = []
-    new_kwargs = OrderedDict()
-    for param in sig.parameters.values():
-        if param.kind == Parameter.POSITIONAL_ONLY:
-            new_args.append(bound.arguments[param.name])
-        elif param.kind == Parameter.POSITIONAL_OR_KEYWORD:
-            if param.default == Parameter.empty:
-                new_args.append(bound.arguments[param.name])
-            elif param.name in bound.arguments and bound.arguments[param.name] != param.default:
-                new_kwargs[param.name] = bound.arguments[param.name]
-        elif param.kind == Parameter.VAR_POSITIONAL:
-            if param.name in bound.arguments:
-                new_args.extend(bound.arguments[param.name])
-        elif param.kind == Parameter.KEYWORD_ONLY:
-            if param.name in bound.arguments:
-                new_kwargs[param.name] = bound.arguments[param.name]
-        # VAR_KEYWORD
-        elif param.name in bound.arguments:
-            for name, value in bound.arguments[param.name]:
-                new_kwargs[name] = value
-
-    return args[1:], new_kwargs
 
 
 class Expiry:
@@ -144,7 +114,7 @@ class GuidList:
             redis_client = cache.redis
 
             # Update the positional args and verify the args work for the wrapped function
-            args, kwargs = cache_args(func, client, *args, **kwargs)
+            args, kwargs = bind_wrapped_arguments(func, client, *args, **kwargs)
 
             # Get the cache key
             ckey = cache.format_key(self.identifier, *args, **kwargs)
@@ -199,7 +169,7 @@ class ItemList:
             redis_client = cache.redis
 
             # Update the positional args and verify the args work for the wrapped function
-            args, kwargs = cache_args(func, client, *args, **kwargs)
+            args, kwargs = bind_wrapped_arguments(func, client, *args, **kwargs)
 
             # Get the list key
             lkey = cache.format_key(self.list_identifier, *args, **kwargs)
@@ -273,7 +243,7 @@ class SingleItem:
             redis_client = cache.redis
 
             # Update the positional args and verify the args work for the wrapped function
-            args, kwargs = cache_args(func, client, *args, **kwargs)
+            args, kwargs = bind_wrapped_arguments(func, client, *args, **kwargs)
 
             # Get the cache key
             ckey = cache.format_key(self.identifier, *args, **kwargs)
@@ -327,7 +297,7 @@ class BatchItem:
             redis_client = cache.redis
 
             # Update the positional args and verify the args work for the wrapped function
-            args, kwargs = cache_args(func, client, *args, **kwargs)
+            args, kwargs = bind_wrapped_arguments(func, client, *args, **kwargs)
 
             # Get the arguments
             *kargs, items = args
