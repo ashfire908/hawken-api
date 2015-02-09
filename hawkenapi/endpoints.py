@@ -2,12 +2,22 @@
 # API endpoint definitions
 # Copyright (c) 2013-2015 Andrew Hampe
 
-from enum import Enum
 import urllib.parse
+from enum import Enum, IntEnum, unique
 from hawkenapi.util import create_flags
 
 
+# Request types
+@unique
+class RequestType(IntEnum):
+    guid_list = 0
+    item_list = 1
+    single_item = 2
+    batch_item = 3
+
+
 # Methods and flags
+@unique
 class Methods(str, Enum):
     get = "GET"
     post = "POST"
