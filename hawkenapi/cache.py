@@ -182,7 +182,7 @@ class CacheWrapper:
                 pipe.watch(lkey)
 
                 # Check the cache
-                cache_list = [v.decode() for v in pipe.smembers(lkey)]
+                cache_list = pipe.smembers(lkey)
                 if cache_list:
                     # Load cached data
                     ckeys = [cache.format_key(self.identifier, *copyappend(args, key), **kwargs) for key in cache_list]
