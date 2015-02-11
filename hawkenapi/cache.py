@@ -114,7 +114,7 @@ class CacheWrapper:
             args, kwargs = bind_wrapped_arguments(func, client, *args, **kwargs)
 
             if self.request_type == RequestType.guid_list:
-                return self.cache_item(func, client, bypass, *args, **kwargs)
+                return self.cache_guid(func, client, bypass, *args, **kwargs)
 
             if self.request_type == RequestType.item_list:
                 return self.cache_list(func, client, bypass, *args, **kwargs)
@@ -128,6 +128,43 @@ class CacheWrapper:
             raise ValueError("Unsupported request type")
 
         return wrap
+
+    def cache_guid(self, func, client, bypass, *args, **kwargs):
+        # Init
+        cache = client.cache
+        expires = cache.get_expiry(self.expiry_class)
+        redis_client = cache.redis
+
+        # Get the cache key
+        ckey = cache.format_key(self.identifier, *args, **kwargs)
+
+        # Open a pipeline
+        with redis_client.pipeline() as pipe:
+            if not bypass:
+                # Watch the key
+                pipe.watch(ckey)
+
+                # Check the cache
+                data = pipe.smembers(ckey)
+                if len(data) > 0:
+                    # Returned cached data
+                    return data
+
+            # Perform the wrapped request
+            response = func(client, *args, **kwargs)
+
+            if response:
+                # Cache the result
+                pipe.multi()
+                pipe.sadd(ckey, *response)
+                pipe.expire(ckey, expires)
+                try:
+                    pipe.execute()
+                except WatchError:
+                    # Ignore it and just return the result
+                    pass
+
+        return response
 
     def cache_list(self, func, client, bypass, *args, **kwargs):
         # Init
