@@ -15,6 +15,24 @@ class RequestType(IntEnum):
     single_item = 2
     batch_item = 3
 
+    @staticmethod
+    def set(mode):
+        if not isinstance(mode, RequestType):
+            raise ValueError("Mode must be a instance of request type")
+
+        def wrap(func):
+            func.request_type = mode
+
+            return func
+        return wrap
+
+    @staticmethod
+    def get(func):
+        if not hasattr(func, "request_type"):
+            raise ValueError("Given function has no request type set")
+
+        return func.request_type
+
 
 # Methods and flags
 @unique

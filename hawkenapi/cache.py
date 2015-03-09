@@ -88,19 +88,20 @@ class Cache:
 
 
 class CacheWrapper:
-    def __init__(self, request_type, identifier, list_identifier=None, key=None, expiry=None):
-        if request_type == RequestType.item_list and list_identifier is None:
-            raise ValueError("Item list request selected but no list identifier given")
-        if request_type in (RequestType.item_list, RequestType.batch_item) and key is None:
-            raise ValueError("Key-dependant request selected but no key given")
-
-        self.request_type = request_type
+    def __init__(self, identifier, list_identifier=None, key=None, expiry=None):
         self.identifier = identifier
         self.expiry_class = expiry
         self.list_identifier = list_identifier
         self.key = key
 
     def __call__(self, func):
+        request_type = RequestType.get(func)
+
+        if request_type == RequestType.item_list and self.list_identifier is None:
+            raise ValueError("Item list request selected but no list identifier given")
+        if request_type in (RequestType.item_list, RequestType.batch_item) and self.key is None:
+            raise ValueError("Key-dependant request selected but no key given")
+
         @wraps(func)
         def wrap(client, *args, **kwargs):
             skip = kwargs.pop("cache_skip", False)
@@ -113,16 +114,16 @@ class CacheWrapper:
             # Update the positional args and verify the args work for the wrapped function
             args, kwargs = bind_wrapped_arguments(func, client, *args, **kwargs)
 
-            if self.request_type == RequestType.guid_list:
+            if request_type == RequestType.guid_list:
                 return self.cache_guid(func, client, bypass, *args, **kwargs)
 
-            if self.request_type == RequestType.item_list:
+            if request_type == RequestType.item_list:
                 return self.cache_list(func, client, bypass, *args, **kwargs)
 
-            if self.request_type == RequestType.single_item:
+            if request_type == RequestType.single_item:
                 return self.cache_item(func, client, bypass, *args, **kwargs)
 
-            if self.request_type == RequestType.batch_item:
+            if request_type == RequestType.batch_item:
                 return self.cache_batch(func, client, bypass, *args, **kwargs)
 
             raise ValueError("Unsupported request type")
