@@ -1,8 +1,8 @@
 # -*- coding: utf-8 -*-
 # API mappings
-# Copyright (c) 2013-2014 Andrew Hampe
+# Copyright (c) 2013-2015 Andrew Hampe
 
-from enum import IntEnum, unique
+from enum import Enum, IntEnum, unique
 
 
 @unique
@@ -11,6 +11,12 @@ class MatchState(IntEnum):
     prematch = 1
     inprogress = 2
     postmatch = 3
+
+
+@unique
+class CurrencyType(Enum):
+    hawken_credits = "HP"
+    meteor_credits = "MP"
 
 
 @unique

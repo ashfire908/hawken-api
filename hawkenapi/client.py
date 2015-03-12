@@ -27,7 +27,7 @@ def require_auth(func):
         # Check if we have authenticated
         if not self.authed:
             logger.error("Auth-required request made but no authentication has been performed.")
-            raise NotAuthenticated("Client has not authenticated to the API", 401)
+            raise ValueError("Client has not authenticated to the API")
         # Check if the grant has expired
         elif self.grant.is_expired:
             logger.info("Automatically authenticating [expired]")
@@ -38,8 +38,8 @@ def require_auth(func):
             response = func(self, *args, **kwargs)
         except NotAuthorized as e:
             # Only reauth if the grant expired
-            if e.expired and not reauthed:
-                logger.info("Automatically authenticating [reauth] ([%i] {%s})", e.code, e.message)
+            if e.error == NotAuthorized.Error.expired and not reauthed:
+                logger.info("Automatically authenticating [reauth] ([%i] %s)", e.status, e.message)
                 self.reauth()
                 response = func(self, *args, **kwargs)
             else:

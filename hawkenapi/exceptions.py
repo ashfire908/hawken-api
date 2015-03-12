@@ -1,107 +1,113 @@
 # -*- coding: utf-8 -*-
 # API exceptions
-# Copyright (c) 2013-2014 Andrew Hampe
+# Copyright (c) 2013-2015 Andrew Hampe
 
 import re
-from enum import Enum
+import requests
+from enum import Enum, unique
+from hawkenapi.mappings import CurrencyType
 
 
 class ApiException(Exception):
-    def __init__(self, message, code):
-        self.message = message
-        self.code = code
-        super().__init__(message)
+    def __init__(self, response):
+        self.response = response
 
-    def __str__(self):
-        return "Status {0}: {1}".format(self.code, self.message)
+        # Detect exception type
+        if self.response.status_code != requests.codes.ok:
+            self.status = self.response.status_code
+            self.message = self.response.reason
+        else:
+            body = self.response.json()
+
+            self.status = int(body["Status"])
+            self.message = body["Message"]
+
+        super().__init__("[{0}] {1}".format(self.status, self.message))
 
 
 class AuthenticationFailure(ApiException):
-    _re_bad_pass = re.compile(r"^Access Grant Not Issued: Password Incorrect$")
-
-    @property
-    def badpass(self):
-        return AuthenticationFailure.is_badpass(self.message)
-
-    @staticmethod
-    def is_badpass(message):
-        return AuthenticationFailure._re_bad_pass.match(message) is not None
+    pass
 
 
 class AccountLockout(ApiException):
     _re_lockout_start = re.compile(r"^User locked out for ([0-9]+) minutes\.$")
     _re_lockout_active = re.compile(r"^([0-9]+) until end of account lockout\.$")
 
-    def __init__(self, message, code, attempts):
-        super().__init__(message, code)
+    def __init__(self, response):
+        super().__init__(response)
 
-        match = AccountLockout._re_lockout_start.match(message)
+        match = AccountLockout._re_lockout_start.match(self.message)
         if match is None:
-            match = AccountLockout._re_lockout_active.match(message)
+            match = AccountLockout._re_lockout_active.match(self.message)
         if match is None:
             raise ValueError("Message cannot be matched")
 
-        self.duration = int(match.group(1))
-        self.attempts = int(attempts)
+        self.remaining_minutes = int(match.group(1))
+        self.attempts = int(self.response.json()["Result"])
 
     @staticmethod
-    def is_lockout(message):
+    def detect(response):
+        message = response.json()["Message"]
         return AccountLockout._re_lockout_start.match(message) is not None or AccountLockout._re_lockout_active.match(message) is not None
 
 
 class AccountBanned(ApiException):
-    def __init__(self, message, code, result):
-        super().__init__(message, code)
+    def __init__(self, response):
+        super().__init__(response)
 
-        self.reason = result
+        self.reason = self.response.json()["Result"]
 
 
 class AccountDeactivated(ApiException):
-    pass
+    _str_deactivated = "User deactivated"
+
+    @staticmethod
+    def detect(response):
+        message = response.json()["Message"]
+        return message == AccountDeactivated._str_deactivated
 
 
 class NotAuthenticated(ApiException):
-    _re_missing = re.compile(r"^Invalid Access Grant$")
-
-    @property
-    def missing(self):
-        return NotAuthenticated.is_missing(self.message)
+    _str_missing = "Invalid Access Grant"
 
     @staticmethod
-    def is_missing(message):
-        return NotAuthenticated._re_missing.match(message) is not None
+    def detect(response):
+        message = response.json()["Message"]
+        return message == NotAuthenticated._str_missing
 
 
 class NotAuthorized(ApiException):
     _re_expired = re.compile(r"^Invalid Access Grant:\s*\(exp\([0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}.[0-9]{7}Z\) <= now\([0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}.[0-9]{7}Z\)\)$")
     _re_revoked = re.compile(r"^Invalid Access Grant:\s+\(Access grant has been revoked\)$")
 
-    @property
-    def expired(self):
-        return NotAuthorized.is_expired(self.message)
+    @unique
+    class Error(Enum):
+        none = 0  # This is a fault
+        expired = 1
+        revoked = 2
 
-    @property
-    def revoked(self):
-        return NotAuthorized.is_revoked(self.message)
+    def __init__(self, response):
+        super().__init__(response)
+
+        if NotAuthorized._re_expired.match(self.message) is not None:
+            self.error = NotAuthorized.Error.expired
+        elif NotAuthorized._re_revoked.match(self.message) is not None:
+            self.error = NotAuthorized.Error.revoked
+        else:
+            self.error = NotAuthorized.Error.none
 
     @staticmethod
-    def is_expired(message):
-        return NotAuthorized._re_expired.match(message) is not None
-
-    @staticmethod
-    def is_revoked(message):
-        return NotAuthorized._re_revoked.match(message) is not None
+    def detect(response):
+        message = response.json()["Message"]
+        return NotAuthorized._re_expired.match(message) is not None or NotAuthorized._re_revoked.match(message) is not None
 
 
 class NotAllowed(ApiException):
     _re_denied = re.compile(r"^Invalid Access Grant:\s+\(\)$")
 
-    @property
-    def denied(self):
-        return NotAllowed.is_denied(self.message)
-
     @staticmethod
-    def is_denied(message):
+    def detect(response):
+        message = response.json()["Message"]
         return NotAllowed._re_denied.match(message) is not None
 
 
@@ -122,69 +128,66 @@ class InvalidRequest(ApiException):
 
 
 class InvalidResponse(ApiException):
-    def __init__(self, message, code, result):
-        self.result = result
-        super().__init__(message, code)
+    def __init__(self, response, issue):
+        super().__init__(response)
+        self.issue = issue
 
     def __str__(self):
-        return self.message
+        return self.issue
 
 
 class InvalidBatch(ApiException):
-    def __init__(self, message, code, result):
-        self.result = result
-        super().__init__(message, code)
+    def __init__(self, response):
+        super().__init__(response)
+        body = self.response.json()
 
-    @property
-    def errors(self):
-        errors = {}
-        if self.result is not None:
-            for error in self.result:
+        self.errors = {}
+        if "Result" in body:
+            for error in body["Result"]:
                 try:
-                    errors[error["Error"]].append(error["Guid"])
+                    self.errors[error["Error"]].append(error["Guid"])
                 except KeyError:
-                    errors[error["Error"]] = [error["Guid"]]
+                    self.errors[error["Error"]] = [error["Guid"]]
 
-        return errors
+    @staticmethod
+    def detect(response):
+        if "X-Meteor-Batch" in response.request.headers:
+            message = response.json()["Message"]
+            if message in ("Batch request must contain valid guids in 'x-meteor-batch'.", "Invalid users ID"):
+                return True
+
+        return False
 
 
 class InsufficientFunds(ApiException):
     _re_parse = re.compile(r"^Insufficient ([HM]P) funds\.\s+Cost ([0-9]+)\s*:\s*Balance ([0-9]+)$")
 
-    def __init__(self, message, code):
-        super().__init__(message, code)
+    def __init__(self, response):
+        super().__init__(response)
 
         # Parse out the metadata
-        self._match = InsufficientFunds._re_parse.match(message)
-        if self._match is None:
-            self.currency = None
-            self.cost = None
-            self.balance = None
-        else:
-            self.currency = self._match.group(1)
-            self.cost = int(self._match.group(2))
-            self.balance = int(self._match.group(3))
-
-    @property
-    def is_match(self):
-        return self._match is not None
+        match = InsufficientFunds._re_parse.match(self.message)
+        self.currency = CurrencyType(match.group(1))
+        self.cost = int(match.group(2))
+        self.balance = int(match.group(3))
 
 
 class InvalidStatTransfer(ApiException):
     _re_notenough = re.compile(r"^Item ([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-4[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}) does not have enough ([A-Za-z0-9]+) to transfer\.\s+Actual: ([0-9]+) Required ([0-9]+)$")
     _re_toomany = re.compile(r"^Item ([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-4[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}) has too many ([A-Za-z0-9]+) to transfer\.\s+Proposed: ([0-9]+) Cap: ([0-9]+)$")
-    _re_notamultiple = re.compile(r"^Transfer must be a multiple of StatPerCurrency$")
     _re_insufficient = re.compile(r"^User does not have enough ([A-Za-z0-9]+)$")
+    _str_notamultiple = "Transfer must be a multiple of StatPerCurrency"
 
+    @unique
     class Error(Enum):
-        none = 0
+        none = 0  # This is a fault
         notenough = 1
         toomany = 2
         notamultiple = 3
         insufficient = 4
 
-    def __init__(self, message, code):
-        super().__init__(message, code)
+    def __init__(self, response):
+        super().__init__(response)
 
         self.type = InvalidStatTransfer.Error.none
         self.item = None
@@ -193,7 +196,7 @@ class InvalidStatTransfer(ApiException):
         self.threshold = None
 
         # Parse out the metadata
-        match = InvalidStatTransfer._re_notenough.match(message)
+        match = InvalidStatTransfer._re_notenough.match(self.message)
         if match:
             self.type = InvalidStatTransfer.Error.notenough
             self.item = match.group(1)
@@ -201,7 +204,7 @@ class InvalidStatTransfer(ApiException):
             self.requested = int(match.group(3))
             self.threshold = int(match.group(4))
         else:
-            match = InvalidStatTransfer._re_toomany.match(message)
+            match = InvalidStatTransfer._re_toomany.match(self.message)
             if match:
                 self.type = InvalidStatTransfer.Error.toomany
                 self.item = match.group(1)
@@ -209,15 +212,20 @@ class InvalidStatTransfer(ApiException):
                 self.requested = int(match.group(3))
                 self.threshold = int(match.group(4))
             else:
-                match = InvalidStatTransfer._re_notamultiple.match(message)
+                match = InvalidStatTransfer._re_insufficient.match(self.message)
                 if match:
+                    self.type = InvalidStatTransfer.Error.insufficient
+                    self.stat = match.group(1)
+                elif self.message == InvalidStatTransfer._str_notamultiple:
                     self.type = InvalidStatTransfer.Error.notamultiple
-                else:
-                    match = InvalidStatTransfer._re_insufficient.match(message)
-                    if match:
-                        self.type = InvalidStatTransfer.Error.insufficient
-                        self.stat = match.group(1)
 
-    @property
-    def is_match(self):
-        return self.type != InvalidStatTransfer.Error.none
+    @staticmethod
+    def detect(response):
+        message = response.json()["Message"]
+        if InvalidStatTransfer._re_notenough.match(message) is None:
+            if InvalidStatTransfer._re_toomany.match(message) is None:
+                if InvalidStatTransfer._re_insufficient.match(message) is None:
+                    if message != InvalidStatTransfer._str_notamultiple:
+                        return False
+
+        return True
