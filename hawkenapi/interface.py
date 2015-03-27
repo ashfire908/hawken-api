@@ -14,7 +14,7 @@ from hawkenapi.endpoints import Methods
 from hawkenapi.exceptions import AuthenticationFailure, NotAuthorized, InternalServerError, \
     ServiceUnavailable, WrongUser, InvalidRequest, InvalidBatch, InvalidResponse, NotAuthenticated, \
     NotAllowed, InsufficientFunds, InvalidStatTransfer, AccountBanned, AccountDeactivated, AccountLockout
-from hawkenapi.util import verify_guid, chunks
+from hawkenapi.util import verify_guid, chunks, BLANK_GUID
 
 __all__ = ["ApiSession", "auth", "deauth", "achievement_list", "achievement_batch", "achievement_reward_list",
            "achievement_reward_single", "achievement_reward_batch", "achievement_user_list", "achievement_user_batch",
@@ -789,7 +789,7 @@ def matchmaking_advertisement(session, grant, guid):
 
     # Check for requested/assigned server mismatch
     if reply["Result"]["ReadyToDeliver"] and \
-       reply["Result"]["RequestedServerGuid"] != "00000000-0000-0000-0000-000000000000" and \
+       reply["Result"]["RequestedServerGuid"] != BLANK_GUID and \
        reply["Result"]["AssignedServerGuid"] != reply["Result"]["RequestedServerGuid"]:
         raise InvalidResponse(response, "Requested server GUID does not matched assigned server GUID")
 

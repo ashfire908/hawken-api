@@ -9,6 +9,8 @@ from datetime import datetime
 from collections import OrderedDict
 from inspect import signature, Parameter
 
+BLANK_GUID = "00000000-0000-0000-0000-000000000000"
+
 
 def chunks(seq, length):
     return [seq[i:i + length] for i in range(0, len(seq), length)]
