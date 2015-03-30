@@ -59,13 +59,13 @@ class Session(requests.Session):
         elif stack:
             self.stack = stack
         else:
-            self.host = "services.live.hawken.meteor-ent.com"
+            self.host = "v2.services.live.hawken.meteor-ent.com"
 
         # Set the scheme
         if scheme:
             self.scheme = scheme
         else:
-            self.scheme = "http"
+            self.scheme = "https"
 
         # Set the timeout
         self.timeout = timeout
