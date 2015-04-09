@@ -365,17 +365,22 @@ class Client:
     @CacheWrapper("game_client_status", expiry="status")
     @RequestType.set(RequestType.single_item)
     def get_game_client_status(self):
-        return status_game_client(self.session)
+        return status(self.session, "game_client")
 
     @CacheWrapper("game_servers_status", expiry="status")
     @RequestType.set(RequestType.single_item)
     def get_game_servers_status(self):
-        return status_game_servers(self.session)
+        return status(self.session, "game_servers")
 
     @CacheWrapper("services_status", expiry="status")
     @RequestType.set(RequestType.single_item)
     def get_services_status(self):
-        return status_services(self.session)
+        return status(self.session, "services")
+
+    @CacheWrapper("website_status", expiry="status")
+    @RequestType.set(RequestType.single_item)
+    def get_website_status(self):
+        return status(self.session, "website")
 
     @CacheWrapper("user", expiry="user")
     @require_auth
