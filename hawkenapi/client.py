@@ -7,7 +7,7 @@ from functools import wraps
 import logging
 from hawkenapi.cache import CacheWrapper
 from hawkenapi.endpoints import RequestType
-from hawkenapi.exceptions import NotAuthenticated, NotAuthorized, InvalidBatch
+from hawkenapi.exceptions import NotAuthorized, InvalidBatch
 from hawkenapi.interface import *
 from hawkenapi.util import JWTParser
 
