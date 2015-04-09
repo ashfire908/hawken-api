@@ -271,7 +271,7 @@ class CacheWrapper:
 
         # Check if we have a single item
         if isinstance(items, str):
-            self.cache_item(func, client, bypass, *args, **kwargs)
+            return self.cache_item(func, client, bypass, *args, **kwargs)
 
         if len(items) == 0:
             # Nothing to cache, pass onto wrapped method
