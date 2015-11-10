@@ -4,12 +4,14 @@
 import sys
 from distutils.core import setup
 
+import hawkenapi
+
 install_requires = ["requests", "iso8601"]
 if sys.version_info < (3, 4):
     install_requires.append("enum34")
 
 setup(name="hawkenapi",
-      version="0.6.3.2",
+      version=hawkenapi.__version__,
       description="Hawken API Client Library",
       author="Andrew Hampe",
       author_email="andrew.hampe@gmail.com",
