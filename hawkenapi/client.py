@@ -65,6 +65,14 @@ class AccessGrant:
     def is_expired(self):
         return datetime.now() > self.expires
 
+    @property
+    def is_not_ready(self):
+        return self.not_before > datetime.now()
+
+    @property
+    def is_valid(self):
+        return self.not_before > datetime.now() > self.expires
+
     def __str__(self):
         return self.token
 
