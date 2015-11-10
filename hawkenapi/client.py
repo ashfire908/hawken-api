@@ -35,17 +35,15 @@ def require_auth(func):
             reauthed = True
 
         try:
-            response = func(self, *args, **kwargs)
+            return func(self, *args, **kwargs)
         except NotAuthorized as e:
             # Only reauth if the grant expired
             if e.error == NotAuthorized.Error.expired and not reauthed:
                 logger.info("Automatically authenticating [reauth] ([%i] %s)", e.status, e.message)
                 self.reauth()
-                response = func(self, *args, **kwargs)
-            else:
-                raise
+                return func(self, *args, **kwargs)
 
-        return response
+            raise
     return auth_handler
 
 
