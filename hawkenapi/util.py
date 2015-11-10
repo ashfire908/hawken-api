@@ -5,6 +5,7 @@
 import re
 import base64
 import json
+import iso8601
 from datetime import datetime
 from collections import OrderedDict
 from inspect import signature, Parameter
@@ -24,6 +25,10 @@ def verify_guid(guid):
 
 def verify_match(match):
     return MATCH_REGEX.match(match) is not None
+
+
+def parse_datetime(datestring):
+    return iso8601.parse_date(datestring)
 
 
 def create_flags(*flags):

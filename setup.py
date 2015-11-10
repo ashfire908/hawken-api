@@ -4,7 +4,7 @@
 import sys
 from distutils.core import setup
 
-install_requires = ["requests"]
+install_requires = ["requests", "iso8601"]
 if sys.version_info < (3, 4):
     install_requires.append("enum34")
 

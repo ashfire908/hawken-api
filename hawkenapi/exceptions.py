@@ -6,6 +6,7 @@ import re
 import requests
 from enum import Enum, unique
 from hawkenapi.mappings import CurrencyType
+from hawkenapi.util import parse_datetime
 
 
 class ApiException(Exception):
@@ -77,29 +78,45 @@ class NotAuthenticated(ApiException):
 
 
 class NotAuthorized(ApiException):
-    _re_expired = re.compile(r"^Invalid Access Grant:\s*\(exp\([0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}.[0-9]{7}Z\) <= now\([0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}.[0-9]{7}Z\)\)$")
+    _re_not_yet = re.compile(r"^Invalid Access Grant:\s*\(nbf\(([0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}.[0-9]{7}Z)\) >= now\(([0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}.[0-9]{7}Z)\)\)$")
+    _re_expired = re.compile(r"^Invalid Access Grant:\s*\(exp\(([0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}.[0-9]{7}Z)\) <= now\(([0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}.[0-9]{7}Z)\)\)$")
     _re_revoked = re.compile(r"^Invalid Access Grant:\s+\(Access grant has been revoked\)$")
 
     @unique
     class Error(Enum):
-        none = 0  # This is a fault
+        invalid = 0
         expired = 1
         revoked = 2
+        not_yet = 3
 
     def __init__(self, response):
         super().__init__(response)
 
-        if NotAuthorized._re_expired.match(self.message) is not None:
-            self.error = NotAuthorized.Error.expired
-        elif NotAuthorized._re_revoked.match(self.message) is not None:
-            self.error = NotAuthorized.Error.revoked
+        self.not_before = None
+        self.expires = None
+        self.now = None
+
+        match = NotAuthorized._re_not_yet.match(self.message)
+        if match is not None:
+            self.error = NotAuthorized.Error.not_yet
+            self.not_before = parse_datetime(match.group(1))
+            self.now = parse_datetime(match.group(2))
         else:
-            self.error = NotAuthorized.Error.none
+            match = NotAuthorized._re_expired.match(self.message)
+            if match is not None:
+                self.error = NotAuthorized.Error.expired
+                self.expires = parse_datetime(match.group(1))
+                self.now = parse_datetime(match.group(2))
+            elif NotAuthorized._re_revoked.match(self.message) is not None:
+                self.error = NotAuthorized.Error.revoked
+            else:
+                self.error = NotAuthorized.Error.invalid
 
     @staticmethod
     def detect(response):
         message = response.json()["Message"]
-        return NotAuthorized._re_expired.match(message) is not None or NotAuthorized._re_revoked.match(message) is not None
+        regexs = (NotAuthorized._re_not_yet, NotAuthorized._re_expired, NotAuthorized._re_revoked)
+        return any((regex.match(message) is not None for regex in regexs))
 
 
 class NotAllowed(ApiException):
