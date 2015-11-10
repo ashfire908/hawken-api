@@ -10,6 +10,8 @@ from collections import OrderedDict
 from inspect import signature, Parameter
 
 BLANK_GUID = "00000000-0000-0000-0000-000000000000"
+GUID_REGEX = re.compile(r"^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$", re.IGNORECASE)
+MATCH_REGEX = re.compile(r"^[0-9a-f]{8}4[0-9a-f]{13}[89ab][0-9a-f]{9}$", re.IGNORECASE)
 
 
 def chunks(seq, length):
@@ -17,17 +19,11 @@ def chunks(seq, length):
 
 
 def verify_guid(guid):
-    if re.match(r"^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-4[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$", guid) is None:
-        return False
-
-    return True
+    return GUID_REGEX.match(guid) is not None
 
 
 def verify_match(match):
-    if re.match(r"^[0-9a-fA-F]{8}4[0-9a-fA-F]{23}$", match) is None:
-        return False
-
-    return True
+    return MATCH_REGEX.match(match) is not None
 
 
 def create_flags(*flags):
