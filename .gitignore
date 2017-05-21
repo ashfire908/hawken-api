@@ -11,3 +11,4 @@ venv/
 *.sublime-workspace
 .codeintel
 .idea/
+*.iml
