@@ -200,10 +200,7 @@ class Client:
             except InvalidBatch:
                 return None
 
-            if data:
-                return data[0]
-
-            return data
+            return data[0]
 
         return achievement_user_batch(self.session, self.grant, user, achievement, countrycode=countrycode)
 

@@ -241,7 +241,7 @@ def auth(session, username, password):
         # Account banned
         raise AccountBanned(response)
 
-    if reply["Status"] in (requests.codes.not_found, requests.codes.invalid_request, requests.codes.unauthorized):
+    if reply["Status"] in (requests.codes.not_found, requests.codes.bad_request, requests.codes.unauthorized):
         # Rejected authentication (No such user/Blank password/Incorrect password)
         raise AuthenticationFailure(response)
 
