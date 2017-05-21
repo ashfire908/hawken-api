@@ -173,11 +173,11 @@ class Client:
         else:
             raise ValueError("Unknown credentials type %s" % self.credentials["type"])
 
-    @CacheWrapper("achievements_list", expiry="game")
+    @CacheWrapper("achievements_list", list_identifier="achievements", key="AchievementGuid", expiry="game")
     @require_auth
-    @RequestType.set(RequestType.guid_list)
+    @RequestType.set(RequestType.item_list)
     def get_achievements_list(self, countrycode=None):
-        return achievements_list(self.session, self.grant, countrycode=countrycode)
+        return achievements(self.session, self.grant, countrycode=countrycode)
 
     @CacheWrapper("achievements", key="AchievementGuid", expiry="game")
     @require_auth
@@ -194,20 +194,26 @@ class Client:
 
         return achievements_batch(self.session, self.grant, achievement, countrycode=countrycode)
 
-    @CacheWrapper("achievement_rewards_list", expiry="game")
+    @CacheWrapper("achievement_rewards_list", list_identifier="achievement_rewards", key="Guid", expiry="game")
     @require_auth
-    @RequestType.set(RequestType.guid_list)
-    def get_achievement_rewards_list(self, countrycode=None):
-        return achievement_rewards_list(self.session, self.grant, countrycode=countrycode)
+    @RequestType.set(RequestType.item_list)
+    def get_achievement_rewards_list(self):
+        return achievement_rewards(self.session, self.grant)
 
     @CacheWrapper("achievement_rewards", key="Guid", expiry="game")
     @require_auth
     @RequestType.set(RequestType.batch_item)
-    def get_achievement_rewards(self, achievement, countrycode=None):
+    def get_achievement_rewards(self, achievement):
         if isinstance(achievement, str):
-            return achievement_rewards_single(self.session, self.grant, achievement, countrycode=countrycode)
+            # Emulate a single-type request
+            try:
+                data = achievement_rewards_batch(self.session, self.grant, [achievement])
+            except InvalidBatch:
+                return None
 
-        return achievement_rewards_batch(self.session, self.grant, achievement, countrycode=countrycode)
+            return data[0]
+
+        return achievement_rewards_batch(self.session, self.grant, achievement)
 
     @CacheWrapper("user_achievements_list", expiry="stats")
     @require_auth
@@ -277,29 +283,41 @@ class Client:
     @require_auth
     @RequestType.set(RequestType.item_list)
     def get_game_items_list(self):
-        return game_items(self.session, self.grant)
+        return game_items_live(self.session, self.grant)
 
     @CacheWrapper("game_items", key="Guid", expiry="game")
     @require_auth
     @RequestType.set(RequestType.batch_item)
     def get_game_items(self, item):
         if isinstance(item, str):
-            return game_items_single(self.session, self.grant, item)
+            # Emulate a single-type request
+            try:
+                data = game_items_batch(self.session, self.grant, [item])
+            except InvalidBatch:
+                return None
+
+            return data[0]
 
         return game_items_batch(self.session, self.grant, item)
 
-    @CacheWrapper("game_offers_list", expiry="game")
+    @CacheWrapper("game_offers_list", list_identifier="game_offers", key="GameOfferGuid", expiry="game")
     @require_auth
-    @RequestType.set(RequestType.guid_list)
+    @RequestType.set(RequestType.item_list)
     def get_game_offers_list(self):
-        return game_offers_list(self.session, self.grant)
+        return game_offers(self.session, self.grant)
 
     @CacheWrapper("game_offers", key="GameOfferGuid", expiry="game")
     @require_auth
     @RequestType.set(RequestType.batch_item)
     def get_game_offers(self, offer):
         if isinstance(offer, str):
-            return game_offers_single(self.session, self.grant, offer)
+            # Emulate a single-type request
+            try:
+                data = game_offers_batch(self.session, self.grant, [offer])
+            except InvalidBatch:
+                return None
+
+            return data[0]
 
         return game_offers_batch(self.session, self.grant, offer)
 
