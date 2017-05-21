@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 # High-level API client
-# Copyright (c) 2013-2015 Andrew Hampe
+# Copyright (c) 2013-2017 Andrew Hampe
 
 from datetime import datetime
 from functools import wraps
@@ -118,7 +118,7 @@ class Client:
     @CacheWrapper.no_cache
     def login(self, identifier, password):
         # Auth to the API
-        grant = auth(self.session, identifier, password)
+        grant = storm_auth(self.session, identifier, password)
 
         if grant:
             # Save the user/password
@@ -135,7 +135,7 @@ class Client:
     @require_auth
     def logout(self):
         try:
-            result = deauth(self.session, str(self.grant), self.guid)
+            result = revoke_auth(self.session, str(self.grant), self.guid)
         finally:
             # Reset the auth info
             del self.grant
@@ -151,7 +151,7 @@ class Client:
     @require_auth
     @RequestType.set(RequestType.guid_list)
     def get_achievements_list(self, countrycode=None):
-        return achievement_list(self.session, self.grant, countrycode=countrycode)
+        return achievements_list(self.session, self.grant, countrycode=countrycode)
 
     @CacheWrapper("achievements", key="AchievementGuid", expiry="game")
     @require_auth
@@ -160,34 +160,34 @@ class Client:
         if isinstance(achievement, str):
             # Emulate a single-type request
             try:
-                data = achievement_batch(self.session, self.grant, [achievement], countrycode=countrycode)
+                data = achievements_batch(self.session, self.grant, [achievement], countrycode=countrycode)
             except InvalidBatch:
                 return None
 
             return data[0]
 
-        return achievement_batch(self.session, self.grant, achievement, countrycode=countrycode)
+        return achievements_batch(self.session, self.grant, achievement, countrycode=countrycode)
 
     @CacheWrapper("achievement_rewards_list", expiry="game")
     @require_auth
     @RequestType.set(RequestType.guid_list)
     def get_achievement_rewards_list(self, countrycode=None):
-        return achievement_reward_list(self.session, self.grant, countrycode=countrycode)
+        return achievement_rewards_list(self.session, self.grant, countrycode=countrycode)
 
     @CacheWrapper("achievement_rewards", key="Guid", expiry="game")
     @require_auth
     @RequestType.set(RequestType.batch_item)
     def get_achievement_rewards(self, achievement, countrycode=None):
         if isinstance(achievement, str):
-            return achievement_reward_single(self.session, self.grant, achievement, countrycode=countrycode)
+            return achievement_rewards_single(self.session, self.grant, achievement, countrycode=countrycode)
 
-        return achievement_reward_batch(self.session, self.grant, achievement, countrycode=countrycode)
+        return achievement_rewards_batch(self.session, self.grant, achievement, countrycode=countrycode)
 
     @CacheWrapper("user_achievements_list", expiry="stats")
     @require_auth
     @RequestType.set(RequestType.guid_list)
     def get_user_achievements_list(self, user, countrycode=None):
-        return achievement_user_list(self.session, self.grant, user, countrycode=countrycode)
+        return user_achievements_list(self.session, self.grant, user, countrycode=countrycode)
 
     @CacheWrapper("user_achievements", key="AchievementGuid", expiry="stats")
     @require_auth
@@ -196,18 +196,18 @@ class Client:
         if isinstance(achievement, str):
             # Emulate a single-type request
             try:
-                data = achievement_user_batch(self.session, self.grant, user, [achievement], countrycode=countrycode)
+                data = user_achievements_batch(self.session, self.grant, user, [achievement], countrycode=countrycode)
             except InvalidBatch:
                 return None
 
             return data[0]
 
-        return achievement_user_batch(self.session, self.grant, user, achievement, countrycode=countrycode)
+        return user_achievements_batch(self.session, self.grant, user, achievement, countrycode=countrycode)
 
     @CacheWrapper.no_cache
     @require_auth
     def unlock_achievement(self, achievement):
-        return achievement_user_unlock(self.session, self.grant, self.guid, achievement)
+        return user_achievements_unlock(self.session, self.grant, self.guid, achievement)
 
     @CacheWrapper("antiaddiction", expiry="user")
     @require_auth
@@ -529,17 +529,11 @@ class Client:
     def get_voice_access(self):
         return voice_access(self.session, self.grant, self.guid)
 
-    @CacheWrapper("voice_info", expiry="globals")
+    @CacheWrapper("voice_info", expiry="user")
     @require_auth
     @RequestType.set(RequestType.single_item)
     def get_voice_info(self):
         return voice_info(self.session, self.grant)
-
-    @CacheWrapper("voice_user_info", expiry="user")
-    @require_auth
-    @RequestType.set(RequestType.single_item)
-    def get_voice_user_info(self, voice):
-        return voice_lookup(self.session, self.grant, voice)
 
     @CacheWrapper("voice_user_id", expiry="user")
     @require_auth

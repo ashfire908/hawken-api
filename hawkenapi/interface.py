@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 # Low-level API interface
-# Copyright (c) 2013-2015 Andrew Hampe
+# Copyright (c) 2013-2017 Andrew Hampe
 
 import socket
 import requests
@@ -13,14 +13,16 @@ from hawkenapi import endpoints
 from hawkenapi.endpoints import Methods
 from hawkenapi.exceptions import AuthenticationFailure, NotAuthorized, InternalServerError, \
     ServiceUnavailable, WrongUser, InvalidRequest, InvalidBatch, InvalidResponse, NotAuthenticated, \
-    NotAllowed, InsufficientFunds, InvalidStatTransfer, AccountBanned, AccountDeactivated, AccountLockout
+    NotAllowed, InsufficientFunds, InvalidStatTransfer, AccountBanned, AccountDeactivated, AccountLockout, \
+    InvalidSteamTicket
 from hawkenapi.util import verify_guid, chunks, BLANK_GUID
 
-__all__ = ["ApiSession", "auth", "deauth", "achievement_list", "achievement_batch", "achievement_reward_list",
-           "achievement_reward_single", "achievement_reward_batch", "achievement_user_list", "achievement_user_batch",
-           "achievement_user_unlock", "antiaddiction", "currency_hawken", "currency_meteor", "events_url", "game_items",
-           "game_items_single", "game_items_batch", "game_offers_list", "game_offers_single", "game_offers_batch",
-           "game_offers_redeem", "game_offers_rent", "generate_advertisement_matchmaking",
+__all__ = ["ApiSession", "storm_auth", "steam_auth", "revoke_auth", "achievements", "achievements_list",
+           "achievements_batch", "achievement_rewards", "achievement_rewards_list", "achievement_rewards_single",
+           "achievement_rewards_batch", "user_achievements_list", "user_achievements_batch", "user_achievements_unlock",
+           "antiaddiction", "currency_hawken", "currency_meteor", "events_url", "game_items", "game_items_live",
+           "game_items_single", "game_items_batch", "game_offers", "game_offers_list", "game_offers_single",
+           "game_offers_batch", "game_offers_redeem", "game_offers_rent", "generate_advertisement_matchmaking",
            "generate_advertisement_server", "matchmaking_advertisement", "matchmaking_advertisement_create",
            "matchmaking_advertisement_delete", "presence_access", "presence_domain", "server_list", "server_single",
            "stat_overflow_list", "stat_overflow_single", "stat_overflow_transfer_from", "stat_overflow_transfer_to",
@@ -28,8 +30,8 @@ __all__ = ["ApiSession", "auth", "deauth", "achievement_list", "achievement_batc
            "user_game_settings_create", "user_game_settings_update", "user_game_settings_delete", "user_guid",
            "user_items", "user_items_batch", "user_items_broker", "user_items_stats", "user_items_stats_single",
            "user_meteor_settings", "user_publicdata_single", "user_server", "user_stats_single", "user_stats_batch",
-           "version", "voice_access", "voice_info", "voice_lookup", "voice_user", "voice_channel", "bundle_list",
-           "bundle_single", "bundle_batch", "user_publicdata_batch"]
+           "version", "voice_access", "voice_info", "voice_user", "voice_channel", "bundle_list", "bundle_single",
+           "bundle_batch", "user_publicdata_batch", "game_items_live", "user_session"]
 
 BATCH_LIMIT = 200
 
@@ -213,7 +215,7 @@ class ApiSession(requests.Session):
         return self.api_call(Methods.delete, endpoint, *args, **kwargs)
 
 
-def auth(session, username, password):
+def storm_auth(session, username, password):
     # Validate the username and password
     if not isinstance(username, str) or username == "":
         raise ValueError("Username cannot be blank")
@@ -249,7 +251,29 @@ def auth(session, username, password):
     return False
 
 
-def deauth(session, grant, guid):
+def steam_auth(session, ticket):
+    # Validate the auth ticket
+    if not isinstance(ticket, str) or ticket == "":
+        raise ValueError("Steam auth ticket cannot be blank")
+
+    data = {"SteamAuthTicket": ticket}
+
+    response = session.api_post(endpoints.steam_login, data=data, check=False)
+    reply = response.json()
+
+    if reply["Status"] == requests.codes.ok:
+        # Return response
+        return reply["Result"]
+
+    if reply["Status"] == requests.codes.bad_request:
+        # Invalid ticket
+        raise InvalidSteamTicket(response)
+
+    # Catch all failure
+    return False
+
+
+def revoke_auth(session, grant, guid):
     # Validate the guid given
     if not verify_guid(guid):
         raise ValueError("Invalid user GUID given")
@@ -273,14 +297,24 @@ def deauth(session, grant, guid):
     return False
 
 
-def achievement_list(session, grant, countrycode=None):
-    response = session.api_get(endpoints.achievement, grant=grant, countrycode=countrycode)
+def achievements(session, grant, countrycode=None):
+    if countrycode is None:
+        countrycode = ""
+
+    response = session.api_get(endpoints.achievement, countrycode, grant=grant)
 
     # Return the achievement list
     return response.json()["Result"]
 
 
-def achievement_batch(session, grant, guids, countrycode=None):
+def achievements_list(session, grant, countrycode=None):
+    response = session.api_get(endpoints.achievement_list, grant=grant, countrycode=countrycode)
+
+    # Return the achievement list
+    return response.json()["Result"]
+
+
+def achievements_batch(session, grant, guids, countrycode=None):
     # Validate the guids given
     if len(guids) == 0:
         raise ValueError("List of achievement GUIDs cannot be empty")
@@ -298,14 +332,21 @@ def achievement_batch(session, grant, guids, countrycode=None):
     return data
 
 
-def achievement_reward_list(session, grant, countrycode=None):
-    response = session.api_get(endpoints.achievement_reward, grant=grant, countrycode=countrycode)
+def achievement_rewards(session, grant):
+    response = session.api_get(endpoints.achievement_reward, grant=grant)
 
     # Return response
     return response.json()["Result"]
 
 
-def achievement_reward_single(session, grant, guid, countrycode=None):
+def achievement_rewards_list(session, grant, countrycode=None):
+    response = session.api_get(endpoints.achievement_reward_list, grant=grant, countrycode=countrycode)
+
+    # Return response
+    return response.json()["Result"]
+
+
+def achievement_rewards_single(session, grant, guid, countrycode=None):
     # Validate the guid given
     if not verify_guid(guid):
         raise ValueError("Invalid achievement reward GUID given")
@@ -321,7 +362,7 @@ def achievement_reward_single(session, grant, guid, countrycode=None):
     return reply["Result"]
 
 
-def achievement_reward_batch(session, grant, guids, countrycode=None):
+def achievement_rewards_batch(session, grant, guids, countrycode=None):
     # Validate the guids given
     if len(guids) == 0:
         raise ValueError("List of achievement reward GUIDs cannot be empty")
@@ -339,7 +380,7 @@ def achievement_reward_batch(session, grant, guids, countrycode=None):
     return data
 
 
-def achievement_user_list(session, grant, guid, countrycode=None):
+def user_achievements_list(session, grant, guid, countrycode=None):
     # Validate the guid given
     if not verify_guid(guid):
         raise ValueError("Invalid user GUID given")
@@ -359,7 +400,7 @@ def achievement_user_list(session, grant, guid, countrycode=None):
     return reply["Result"]
 
 
-def achievement_user_batch(session, grant, user, achievements, countrycode=None):
+def user_achievements_batch(session, grant, user, achievements, countrycode=None):
     # Validate the guids given
     if not verify_guid(user):
         raise ValueError("Invalid user GUID given")
@@ -384,7 +425,7 @@ def achievement_user_batch(session, grant, user, achievements, countrycode=None)
     return reply["Result"]
 
 
-def achievement_user_unlock(session, grant, user, achievement):
+def user_achievements_unlock(session, grant, user, achievement):
     # Validate the guids given
     if not verify_guid(user):
         raise ValueError("Invalid user GUID given")
@@ -517,6 +558,13 @@ def game_items(session, grant):
     return response.json()["Result"]
 
 
+def game_items_live(session, grant):
+    response = session.api_get(endpoints.item_live, grant=grant)
+
+    # Return response
+    return response.json()["Result"]
+
+
 def game_items_single(session, grant, guid):
     # Validate the guid given
     if not verify_guid(guid):
@@ -552,8 +600,15 @@ def game_items_batch(session, grant, guids):
     return reply["Result"]
 
 
-def game_offers_list(session, grant):
+def game_offers(session, grant):
     response = session.api_get(endpoints.offer, grant=grant)
+
+    # Return response
+    return response.json()["Result"]
+
+
+def game_offers_list(session, grant):
+    response = session.api_get(endpoints.offer_list, grant=grant)
 
     # Return response
     return response.json()["Result"]
@@ -1338,6 +1393,13 @@ def user_server(session, grant, guid):
     return reply["Result"]
 
 
+def user_session(session, grant):
+    response = session.api_get(endpoints.session, grant=grant)
+
+    # Return response
+    return response.json()["Result"]
+
+
 def user_stats_single(session, grant, guid):
     # Validate the guid given
     if not verify_guid(guid):
@@ -1416,22 +1478,6 @@ def voice_info(session, grant):
 
     # Return response
     return response.json()["Result"]
-
-
-def voice_lookup(session, grant, guid):
-    # Validate the guid given
-    if not verify_guid(guid):
-        raise ValueError("Invalid vivox user GUID given")
-
-    response = session.api_get(endpoints.voice_lookup, guid, grant=grant)
-    reply = response.json()
-
-    if reply["Status"] == requests.codes.not_found:
-        # No such user
-        return None
-
-    # Return response
-    return reply["Result"]
 
 
 def voice_user(session, grant, guid):

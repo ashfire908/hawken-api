@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 # API exceptions
-# Copyright (c) 2013-2015 Andrew Hampe
+# Copyright (c) 2013-2017 Andrew Hampe
 
 import re
 import requests
@@ -138,6 +138,15 @@ class ServiceUnavailable(ApiException):
 
 class WrongUser(ApiException):
     pass
+
+
+class InvalidSteamTicket(ApiException):
+    _str_invalid = "Invalid ticket"
+
+    @staticmethod
+    def detect(response):
+        message = response.json()["Message"]
+        return message == InvalidSteamTicket._str_invalid
 
 
 class InvalidRequest(ApiException):

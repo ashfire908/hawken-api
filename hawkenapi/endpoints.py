@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 # API endpoint definitions
-# Copyright (c) 2013-2015 Andrew Hampe
+# Copyright (c) 2013-2017 Andrew Hampe
 
 import urllib.parse
 from enum import Enum, IntEnum, unique
@@ -80,9 +80,11 @@ class Endpoint:
 
 
 # Define the API endpoints
-achievement = Endpoint("achievements", fields=("countryCode", ), methods=(Methods.get, ), flags=("authrequired", ))
+achievement = Endpoint("game-client/achievements/{0}", methods=(Methods.get, ), flags=("authrequired", ))
+achievement_list = Endpoint("achievements", fields=("countryCode", ), methods=(Methods.get, ), flags=("authrequired", ))
 achievement_batch = Endpoint("achievementsBatch", fields=("countryCode", ), methods=(Methods.get, ), flags=("authrequired", "batchheader"))
-achievement_reward = Endpoint("achievementReward", fields=("countryCode", ), methods=(Methods.get, ), flags=("authrequired", ))
+achievement_reward = Endpoint("game-client/achievement-rewards", methods=(Methods.get, ), flags=("authrequired", ))
+achievement_reward_list = Endpoint("achievementReward", fields=("countryCode", ), methods=(Methods.get, ), flags=("authrequired", ))
 achievement_reward_batch = Endpoint("achievementRewardBatch", fields=("countryCode", ), methods=(Methods.get, ), flags=("authrequired", "batchheader"))
 achievement_reward_single = Endpoint("achievementReward/{0}", fields=("countryCode", ), methods=(Methods.get, ), flags=("authrequired", ))
 achievement_user = Endpoint("userAchievements/{0}", fields=("countryCode", ), methods=(Methods.get, ), flags=("authrequired", "batchheader"))
@@ -98,9 +100,11 @@ currency_game = Endpoint("gameCurrency/{0}", methods=(Methods.get, ), flags=("au
 currency_meteor = Endpoint("meteorCurrency/{0}", methods=(Methods.get, ), flags=("authrequired", ))
 eventsurl = Endpoint("eventsurl", methods=(Methods.get, ))
 item = Endpoint("gameItems", methods=(Methods.get, ), flags=("authrequired", ))
+item_live = Endpoint("game-client/game-items", methods=(Methods.get, ), flags=("authrequired", ))
 item_batch = Endpoint("gameItemsBatch", methods=(Methods.post, ), flags=("authrequired", "batchpost"))
 item_single = Endpoint("gameItems/{0}", methods=(Methods.get, ), flags=("authrequired", ))
-offer = Endpoint("gameOffers", methods=(Methods.get, ), flags=("authrequired", ))
+offer = Endpoint("game-client/game-offers", methods=(Methods.get, ), flags=("authrequired", ))
+offer_list = Endpoint("gameOffers", methods=(Methods.get, ), flags=("authrequired", ))
 offer_batch = Endpoint("gameOffersBatch", methods=(Methods.post, ), flags=("authrequired", "batchpost"))
 offer_single = Endpoint("gameOffers/{0}", methods=(Methods.get, ), flags=("authrequired", ))
 offer_redeemer = Endpoint("userGameOfferRedeemer/{0}/{1}", methods=(Methods.post, ), flags=("authrequired", ))
@@ -108,6 +112,8 @@ offer_renter = Endpoint("userGameOfferRenter/{0}/{1}", methods=(Methods.post, ),
 server = Endpoint("gameServerListings", methods=(Methods.get, ), flags=("authrequired", ))
 server_single = Endpoint("gameServerListings/{0}", methods=(Methods.get, ), flags=("authrequired", ))
 server_user = Endpoint("userGameServers/{0}", methods=(Methods.get, ), flags=("authrequired", ))
+session = Endpoint("session/{0}", methods=(Methods.get, ), flags=("authrequired", ))
+steam_login = Endpoint("steam/login", methods=(Methods.post, ))
 presence_access = Endpoint("thirdParty/{0}/Presence/Access", methods=(Methods.get, ), flags=("authrequired", ))
 presence_domain = Endpoint("thirdParty/{0}/Presence/Domain", methods=(Methods.get, ), flags=("authrequired", ))
 statoverflow = Endpoint("statOverflow", methods=(Methods.get, ), flags=("authrequired", ))
@@ -135,7 +141,6 @@ user_stat_batch = Endpoint("userStats", methods=(Methods.get, ), flags=("authreq
 user_stat_single = Endpoint("userStats/{0}", methods=(Methods.get, ), flags=("authrequired", ))
 version = Endpoint("version", methods=(Methods.get, ))
 voice_access = Endpoint("thirdParty/{0}/Vivox/Access", methods=(Methods.get, ), flags=("authrequired", ))
-voice_info = Endpoint("voiceInfo", methods=(Methods.get, ), flags=("authrequired", ))
-voice_lookup = Endpoint("vivoxLookup/{0}", methods=(Methods.get, ), flags=("authrequired", ))
+voice_info = Endpoint("vivox/credentials", methods=(Methods.get, ), flags=("authrequired", ))
 voice_user = Endpoint("thirdParty/{0}/Vivox/User", methods=(Methods.get, ), flags=("authrequired", ))
 voice_channel = Endpoint("voiceChannelListings/{0}", methods=(Methods.get, ), flags=("authrequired", ))
