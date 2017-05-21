@@ -387,6 +387,12 @@ class Client:
 
         return servers
 
+    @CacheWrapper.no_cache
+    @require_auth
+    @RequestType.set(RequestType.single_item)
+    def get_session(self):
+        return user_session(self.session, self.grant)
+
     @CacheWrapper("stat_overflow_list", expiry="game")
     @require_auth
     @RequestType.set(RequestType.guid_list)
