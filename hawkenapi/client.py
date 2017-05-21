@@ -87,8 +87,7 @@ class Client:
 
         # Init auth data
         self._grant = None
-        self.identifier = None
-        self.password = None
+        self.credentials = None
 
         self.cache = cache
 
@@ -116,17 +115,38 @@ class Client:
         return self._grant is not None
 
     @CacheWrapper.no_cache
-    def login(self, identifier, password):
+    def storm_login(self, identifier, password):
         # Auth to the API
         grant = storm_auth(self.session, identifier, password)
 
         if grant:
             # Save the user/password
-            self.identifier = identifier
-            self.password = password
+            self.credentials = {
+                "type": "storm",
+                "identifier": identifier,
+                "password": password
+            }
 
             # Set the grant token
             self.grant = grant
+
+            return True
+        return False
+
+    @CacheWrapper.no_cache
+    def steam_login(self, auth_ticket):
+        # Auth to the API
+        response = steam_auth(self.session, auth_ticket)
+
+        if response:
+            # Save the ticket
+            self.credentials = {
+                "type": "steam",
+                "ticket": auth_ticket
+            }
+
+            # Set the grant token
+            self.grant = response["AccessGrant"]
 
             return True
         return False
@@ -139,13 +159,19 @@ class Client:
         finally:
             # Reset the auth info
             del self.grant
-            self.identifier = None
-            self.password = None
+            self.credentials = None
 
         return result
 
     def reauth(self):
-        return self.login(self.identifier, self.password)
+        if self.credentials is None:
+            raise ValueError("Client has not authenticated to the API")
+        elif self.credentials["type"] == "storm":
+            return self.storm_login(self.credentials["identifier"], self.credentials["password"])
+        elif self.credentials["type"] == "steam":
+            return self.steam_login(self.credentials["ticket"])
+        else:
+            raise ValueError("Unknown credentials type %s" % self.credentials["type"])
 
     @CacheWrapper("achievements_list", expiry="game")
     @require_auth
