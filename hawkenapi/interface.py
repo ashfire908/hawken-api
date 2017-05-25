@@ -52,7 +52,7 @@ class ApiSession(requests.Session):
         super().__init__()
 
         # Set defaults
-        self._host = "v2.services.live.hawken.meteor-ent.com"
+        self._host = "v2-services-live-pc.playhawken.com"
         self._stack = None
         self._scheme = "https"
 
